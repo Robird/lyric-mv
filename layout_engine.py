@@ -173,20 +173,28 @@ class LayoutEngine:
         return self.strategy.arrange_elements(self.elements, video_width, video_height)
 
     def detect_conflicts(self, video_width: int, video_height: int) -> List[str]:
-        """检测布局冲突"""
+        """检测布局冲突
+
+        注意：这里检测的是元素原始区域的冲突，而不是布局后的区域
+        """
         if len(self.elements) < 2:
             return []
 
         conflicts = []
-        layout_result = self.calculate_layout(video_width, video_height)
+
+        # 计算每个元素的原始区域（不经过布局调整）
+        element_rects = {}
+        for element in self.elements:
+            rect = element.calculate_required_rect(video_width, video_height)
+            element_rects[element.element_id] = rect
 
         # 检查两两重叠
-        element_ids = list(layout_result.element_positions.keys())
+        element_ids = list(element_rects.keys())
         for i in range(len(element_ids)):
             for j in range(i + 1, len(element_ids)):
                 id1, id2 = element_ids[i], element_ids[j]
-                rect1 = layout_result.element_positions[id1]
-                rect2 = layout_result.element_positions[id2]
+                rect1 = element_rects[id1]
+                rect2 = element_rects[id2]
 
                 if rect1.overlaps_with(rect2):
                     conflicts.append(f"元素 '{id1}' 与 '{id2}' 重叠")

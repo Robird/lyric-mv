@@ -81,11 +81,8 @@ class SimpleFadeStrategy(LyricDisplayStrategy):
         y_pos = self.y_position or (video_height // 2)
         font_size = timeline.style.font_size
 
-        # 计算最大行数（检查所有歌词中的最大行数）
-        max_lines = 1
-        for _, text in timeline.lyrics_data:
-            lines = text.split('\n')
-            max_lines = max(max_lines, len([line for line in lines if line.strip()]))
+        # 使用预计算的最大行数，避免重复计算
+        max_lines = timeline._max_lines
 
         # 估算文字高度（字体大小 * 1.2 作为行高）
         line_height = int(font_size * 1.2)
@@ -111,30 +108,34 @@ class SimpleFadeStrategy(LyricDisplayStrategy):
             生成的视频片段列表，所有片段都严格遵守时长限制
         """
         clips = []
-        lyrics_data = timeline.get_filtered_lyrics(duration)
+        # 使用新接口：获取预处理后的歌词数据（字符串数组）
+        processed_lyrics = timeline.get_processed_lyrics(duration)
         rect = self.calculate_required_rect(timeline, generator.width, generator.height)
 
-        for i, (start_time, text) in enumerate(lyrics_data):
+        for i, (start_time, lines) in enumerate(processed_lyrics):
             # 计算结束时间，确保不超过总时长限制
-            if i < len(lyrics_data) - 1:
-                end_time = min(lyrics_data[i + 1][0], duration)
+            if i < len(processed_lyrics) - 1:
+                end_time = min(processed_lyrics[i + 1][0], duration)
             else:
                 end_time = duration
 
             # 确保开始时间在时长限制内
             if start_time >= duration:
-                print(f"   跳过歌词（开始时间超出限制 {start_time:.2f}s >= {duration:.2f}s）: '{text}'")
+                print(f"   跳过歌词（开始时间超出限制 {start_time:.2f}s >= {duration:.2f}s）: '{lines}'")
                 continue
 
             lyric_duration = end_time - start_time
             if lyric_duration <= 0.01:
-                print(f"   跳过歌词（时长过短 {lyric_duration:.2f}s）: '{text}'")
+                print(f"   跳过歌词（时长过短 {lyric_duration:.2f}s）: '{lines}'")
                 continue
 
             # 最终验证：确保片段不会超出时长限制
             if start_time + lyric_duration > duration:
                 lyric_duration = duration - start_time
-                print(f"   调整歌词时长以符合限制: '{text}' -> {lyric_duration:.2f}s")
+                print(f"   调整歌词时长以符合限制: '{lines}' -> {lyric_duration:.2f}s")
+
+            # 重新组合为文本（保持与渲染器的接口兼容）
+            text = '\n'.join(lines)
 
             clip = generator.create_lyric_clip_with_animation(
                 text, start_time, lyric_duration,
@@ -165,11 +166,8 @@ class EnhancedPreviewStrategy(LyricDisplayStrategy):
         font_size = timeline.style.font_size
         line_height = int(font_size * 1.2)
 
-        # 计算最大行数（检查所有歌词中的最大行数）
-        max_lines = 1
-        for _, text in timeline.lyrics_data:
-            lines = text.split('\n')
-            max_lines = max(max_lines, len([line for line in lines if line.strip()]))
+        # 使用预计算的最大行数，避免重复计算
+        max_lines = timeline._max_lines
 
         # 单个歌词块的高度
         single_lyric_height = max_lines * line_height
@@ -200,30 +198,34 @@ class EnhancedPreviewStrategy(LyricDisplayStrategy):
             生成的视频片段列表，包括当前歌词和预览歌词，所有片段都严格遵守时长限制
         """
         clips = []
-        lyrics_data = timeline.get_filtered_lyrics(duration)
+        # 使用新接口：获取预处理后的歌词数据（字符串数组）
+        processed_lyrics = timeline.get_processed_lyrics(duration)
         center_y = generator.height // 2
 
-        for i, (start_time, text) in enumerate(lyrics_data):
+        for i, (start_time, lines) in enumerate(processed_lyrics):
             # 计算结束时间，确保不超过总时长限制
-            if i < len(lyrics_data) - 1:
-                end_time = min(lyrics_data[i + 1][0], duration)
+            if i < len(processed_lyrics) - 1:
+                end_time = min(processed_lyrics[i + 1][0], duration)
             else:
                 end_time = duration
 
             # 确保开始时间在时长限制内
             if start_time >= duration:
-                print(f"   跳过主歌词（开始时间超出限制 {start_time:.2f}s >= {duration:.2f}s）: '{text}'")
+                print(f"   跳过主歌词（开始时间超出限制 {start_time:.2f}s >= {duration:.2f}s）: '{lines}'")
                 continue
 
             lyric_duration = end_time - start_time
             if lyric_duration <= 0.01:
-                print(f"   跳过主歌词（时长过短 {lyric_duration:.2f}s）: '{text}'")
+                print(f"   跳过主歌词（时长过短 {lyric_duration:.2f}s）: '{lines}'")
                 continue
 
             # 最终验证：确保片段不会超出时长限制
             if start_time + lyric_duration > duration:
                 lyric_duration = duration - start_time
-                print(f"   调整主歌词时长以符合限制: '{text}' -> {lyric_duration:.2f}s")
+                print(f"   调整主歌词时长以符合限制: '{lines}' -> {lyric_duration:.2f}s")
+
+            # 重新组合为文本（保持与渲染器的接口兼容）
+            text = '\n'.join(lines)
 
             # 当前歌词（高亮）- 对应原来的current_clip
             current_clip = generator.create_lyric_clip_with_animation(
@@ -235,8 +237,9 @@ class EnhancedPreviewStrategy(LyricDisplayStrategy):
             clips.append(current_clip)
 
             # 下一句预览（非高亮）- 对应原来的next_clip
-            if i < len(lyrics_data) - 1:
-                next_text = lyrics_data[i + 1][1]
+            if i < len(processed_lyrics) - 1:
+                next_lines = processed_lyrics[i + 1][1]
+                next_text = '\n'.join(next_lines)  # 重新组合下一句
                 # 预览歌词也需要遵守时长限制
                 if start_time + lyric_duration <= duration:
                     preview_clip = generator.create_lyric_clip_with_animation(
@@ -291,7 +294,37 @@ class LyricTimeline(LayoutElement):
         self._priority = priority
         self._is_flexible = is_flexible
 
+        # 预处理多行文本信息，统一处理，避免策略类重复实现
+        self._processed_lyrics = self._preprocess_lyrics()
+        self._max_lines = self._calculate_max_lines()
+
         self._setup_strategy()
+
+    def _preprocess_lyrics(self) -> List[Tuple[float, List[str]]]:
+        """预处理歌词数据，将文本转换为清理后的字符串数组
+
+        这是关键的职责分离：
+        - 在这里统一处理多行文本的分割和清理
+        - 策略类只需要关注显示逻辑，不需要重复实现文本处理
+
+        Returns:
+            List[Tuple[float, List[str]]]: [(时间戳, [清理后的行列表]), ...]
+        """
+        processed = []
+        for timestamp, text in self.lyrics_data:
+            # 分割并清理空行，统一在这里处理
+            lines = text.split('\n')
+            cleaned_lines = [line.strip() for line in lines if line.strip()]
+            if cleaned_lines:  # 只保留有内容的歌词
+                processed.append((timestamp, cleaned_lines))
+        return processed
+
+    def _calculate_max_lines(self) -> int:
+        """预计算所有歌词中的最大行数，基于预处理后的数据"""
+        max_lines = 1
+        for _, lines in self._processed_lyrics:
+            max_lines = max(max_lines, len(lines))
+        return max_lines
 
     def _setup_strategy(self):
         """根据显示模式设置策略"""
@@ -318,7 +351,7 @@ class LyricTimeline(LayoutElement):
             raise ValueError(f"不支持的显示模式: {mode}")
 
     def get_filtered_lyrics(self, max_duration: float) -> List[Tuple[float, str]]:
-        """获取过滤后的歌词数据
+        """获取过滤后的歌词数据（向后兼容接口）
 
         Args:
             max_duration: 最大时长限制
@@ -340,11 +373,31 @@ class LyricTimeline(LayoutElement):
             raise ValueError("显示策略未设置")
         return self._strategy.generate_clips(self, generator, duration)
 
+    @property
+    def max_lines(self) -> int:
+        """获取最大行数（公共只读属性）"""
+        return self._max_lines
+
+    def get_processed_lyrics(self, max_duration: float = float('inf')) -> List[Tuple[float, List[str]]]:
+        """获取预处理后的歌词数据，供策略类使用
+
+        这是关键的接口：策略类通过这个方法获取已经清理好的字符串数组，
+        无需自己实现文本分割和空行清理逻辑
+
+        Args:
+            max_duration: 最大时长限制
+
+        Returns:
+            List[Tuple[float, List[str]]]: [(时间戳, [清理后的行列表]), ...]
+        """
+        return [(t, lines) for t, lines in self._processed_lyrics if t < max_duration]
+
     def get_info(self) -> Dict[str, Any]:
         """获取时间轴信息"""
         return {
             "language": self.language,
             "total_lines": len(self.lyrics_data),
+            "max_lines": self._max_lines,
             "duration": self.lyrics_data[-1][0] if self.lyrics_data else 0,
             "display_mode": self.display_mode.value,
             "style": self.style,
@@ -397,8 +450,13 @@ class LyricTimeline(LayoutElement):
 
     @staticmethod
     def _parse_lrc_file(lrc_path: str) -> List[Tuple[float, str]]:
-        """解析LRC文件，支持相同时间点的多条记录合并为多行文本"""
-        lyrics_dict = {}  # 使用字典来收集相同时间点的歌词
+        """解析LRC文件，支持相同时间点的多条记录合并为多行文本
+
+        职责分离重构：
+        - 只负责LRC格式解析，保留原始文本
+        - 文本清理和预处理统一由_preprocess_lyrics()负责
+        """
+        lyrics_dict = {}  # 使用字典来收集相同时间点的歌词数组
 
         with open(lrc_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
@@ -415,13 +473,18 @@ class LyricTimeline(LayoutElement):
 
                 if text:  # 只处理非空文本
                     if timestamp in lyrics_dict:
-                        # 相同时间点的歌词用换行符连接
-                        lyrics_dict[timestamp] += '\n' + text
+                        # 相同时间点的歌词添加到数组
+                        lyrics_dict[timestamp].append(text)
                     else:
-                        lyrics_dict[timestamp] = text
+                        lyrics_dict[timestamp] = [text]
 
-        # 转换为列表并排序
-        lyrics = [(timestamp, text) for timestamp, text in lyrics_dict.items()]
+        # 转换为列表，保留原始文本，不进行清理（由_preprocess_lyrics统一处理）
+        lyrics = []
+        for timestamp, text_lines in lyrics_dict.items():
+            # 直接组合为字符串，保留原始内容
+            combined_text = '\n'.join(text_lines)
+            lyrics.append((timestamp, combined_text))
+
         return sorted(lyrics, key=lambda x: x[0])
 
 # ============================================================================
