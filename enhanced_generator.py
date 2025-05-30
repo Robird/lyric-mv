@@ -338,68 +338,66 @@ class EnhancedJingwuGenerator:
             if aux_timeline:
                 print(f"副时间轴信息: {aux_timeline.get_info()}")
 
-            # 布局计算和冲突检测
+            # 布局计算和冲突检测 - 统一使用布局引擎
+            print("使用布局引擎进行自动布局...")
+
+            # 创建布局引擎作为默认的timeline容器
+            layout_engine = LayoutEngine(VerticalStackStrategy(spacing=30))
+
+            # 添加所有时间轴元素
+            layout_engine.add_element(main_timeline)
             if aux_timeline:
-                print("使用布局引擎进行自动布局...")
-
-                # 创建布局引擎
-                layout_engine = LayoutEngine(VerticalStackStrategy(spacing=30))
-
-                # 添加时间轴元素
-                layout_engine.add_element(main_timeline)
                 layout_engine.add_element(aux_timeline)
 
-                # 检测冲突
-                conflicts = layout_engine.detect_conflicts(self.width, self.height)
-                if conflicts:
-                    print("检测到布局冲突:")
-                    for conflict in conflicts:
-                        print(f"  - {conflict}")
+            # 检测冲突
+            conflicts = layout_engine.detect_conflicts(self.width, self.height)
+            if conflicts:
+                print("检测到布局冲突:")
+                for conflict in conflicts:
+                    print(f"  - {conflict}")
 
-                    # 计算自动布局
-                    layout_result = layout_engine.calculate_layout(self.width, self.height)
-                    print("应用自动布局解决方案:")
+                # 计算自动布局
+                layout_result = layout_engine.calculate_layout(self.width, self.height)
+                print("应用自动布局解决方案:")
 
-                    # 应用布局结果到时间轴
-                    for element_id, rect in layout_result.element_positions.items():
-                        print(f"  - {element_id}: {rect}")
+                # 应用布局结果到时间轴
+                for element_id, rect in layout_result.element_positions.items():
+                    print(f"  - {element_id}: {rect}")
 
-                        # 根据element_id找到对应的timeline并更新其策略
-                        if element_id == main_timeline.element_id:
-                            self._apply_layout_to_timeline(main_timeline, rect)
-                        elif aux_timeline and element_id == aux_timeline.element_id:
-                            self._apply_layout_to_timeline(aux_timeline, rect)
-                else:
-                    print("✅ 无布局冲突，使用原始布局")
+                    # 根据element_id找到对应的timeline并更新其策略
+                    if element_id == main_timeline.element_id:
+                        self._apply_layout_to_timeline(main_timeline, rect)
+                    elif aux_timeline and element_id == aux_timeline.element_id:
+                        self._apply_layout_to_timeline(aux_timeline, rect)
             else:
-                # 单歌词模式，显示主时间轴信息
-                main_rect = main_timeline.calculate_required_rect(self.width, self.height)
-                print(f"主时间轴所需区域: {main_rect}")
+                print("✅ 无布局冲突，使用原始布局")
+
+            # 显示所有时间轴的布局信息
+            layout_result = layout_engine.calculate_layout(self.width, self.height)
+            for element_id, rect in layout_result.element_positions.items():
+                print(f"时间轴 {element_id} 布局区域: {rect}")
 
             # 背景处理（保持原有逻辑）
             print("创建背景...")
             background_clip = self._create_video_background(duration, background_image)
             all_video_clips = [background_clip]
 
-            # 使用LyricTimeline生成片段
+            # 使用布局引擎统一生成所有时间轴片段
             print("生成歌词片段...")
-            main_clips = main_timeline.generate_clips(self, duration)
+            all_timeline_clips = []
 
-            # 验证主歌词片段时长
-            print("验证主歌词片段时长...")
-            main_clips = self._validate_clips_duration(main_clips, duration)
-            all_video_clips.extend(main_clips)
+            # 遍历布局引擎中的所有元素生成片段
+            for element in layout_engine.elements:
+                element_clips = element.generate_clips(self, duration)
 
-            num_lyric_clips = len(main_clips)
+                # 验证片段时长
+                print(f"验证 {element.element_id} 片段时长...")
+                validated_clips = self._validate_clips_duration(element_clips, duration)
+                all_timeline_clips.extend(validated_clips)
 
-            if aux_timeline:
-                aux_clips = aux_timeline.generate_clips(self, duration)
-
-                # 验证副歌词片段时长
-                print("验证副歌词片段时长...")
-                aux_clips = self._validate_clips_duration(aux_clips, duration)
-                all_video_clips.extend(aux_clips)
-                num_lyric_clips += len(aux_clips)
+            # 添加所有歌词片段到视频
+            all_video_clips.extend(all_timeline_clips)
+            num_lyric_clips = len(all_timeline_clips)
 
             print(f"   创建了 {num_lyric_clips} 个歌词片段 (总共 {len(all_video_clips)} 个视频片段包括背景)")
 
