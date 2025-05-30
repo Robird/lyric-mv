@@ -311,13 +311,8 @@ class EnhancedJingwuGenerator:
                                      audio_path: str = "",
                                      output_path: str = "",
                                      background_image: Optional[str] = None,
-                                     t_max_sec: float = float('inf'),
-                                     use_layout_engine: bool = True) -> bool:
-        """使用LyricTimeline对象生成视频的核心方法
-
-        Args:
-            use_layout_engine: 是否使用布局引擎进行自动布局
-        """
+                                     t_max_sec: float = float('inf')) -> bool:
+        """使用LyricTimeline对象生成视频的核心方法"""
 
         # 确定生成模式
         is_bilingual_mode = aux_timeline is not None
@@ -344,7 +339,7 @@ class EnhancedJingwuGenerator:
                 print(f"副时间轴信息: {aux_timeline.get_info()}")
 
             # 布局计算和冲突检测
-            if use_layout_engine and aux_timeline:
+            if aux_timeline:
                 print("使用布局引擎进行自动布局...")
 
                 # 创建布局引擎
@@ -377,16 +372,9 @@ class EnhancedJingwuGenerator:
                 else:
                     print("✅ 无布局冲突，使用原始布局")
             else:
-                # 传统布局检测（向后兼容）
+                # 单歌词模式，显示主时间轴信息
                 main_rect = main_timeline.calculate_required_rect(self.width, self.height)
                 print(f"主时间轴所需区域: {main_rect}")
-
-                if aux_timeline:
-                    aux_rect = aux_timeline.calculate_required_rect(self.width, self.height)
-                    print(f"副时间轴所需区域: {aux_rect}")
-
-                    if main_rect.overlaps_with(aux_rect):
-                        print("警告: 时间轴显示区域重叠，可能需要调整布局")
 
             # 背景处理（保持原有逻辑）
             print("创建背景...")
