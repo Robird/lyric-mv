@@ -7,14 +7,18 @@ LyricTimeline核心类型实现
 - 自报告尺寸机制
 - 策略模式的可扩展设计
 - 向后兼容的接口
+- Layout布局器支持
 """
 
 import re
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Optional, Dict, Any
-from dataclasses import dataclass
 from enum import Enum
 from moviepy.editor import ImageClip
+
+# 导入布局相关的数据类型
+from layout_types import LyricRect, LyricStyle
+from layout_engine import LayoutElement
 
 # ============================================================================
 # 基础数据结构
@@ -26,57 +30,11 @@ class LyricDisplayMode(Enum):
     ENHANCED_PREVIEW = "enhanced_preview"  # 增强模式：当前+预览
     KARAOKE_STYLE = "karaoke_style"       # 卡拉OK样式（未来扩展）
 
-@dataclass
-class LyricRect:
-    """歌词显示区域信息
+# LyricRect和LyricStyle现在从layout_types模块导入
 
-    表示歌词在视频中的显示区域，支持重叠检测和位置计算
-    """
-    x: int
-    y: int
-    width: int
-    height: int
-
-    def __post_init__(self):
-        """验证尺寸参数"""
-        if self.width <= 0 or self.height <= 0:
-            raise ValueError("宽度和高度必须大于0")
-
-    def contains_point(self, x: int, y: int) -> bool:
-        """检查点是否在区域内"""
-        return (self.x <= x <= self.x + self.width and
-                self.y <= y <= self.y + self.height)
-
-    def overlaps_with(self, other: 'LyricRect') -> bool:
-        """检查是否与另一个区域重叠"""
-        return not (self.x + self.width < other.x or
-                   other.x + other.width < self.x or
-                   self.y + self.height < other.y or
-                   other.y + other.height < self.y)
-
-@dataclass
-class LyricStyle:
-    """歌词样式配置
-
-    封装所有与歌词显示相关的样式参数
-    """
-    font_size: int = 80
-    font_color: str = 'white'
-    highlight_color: str = '#FFD700'
-    shadow_color: Tuple[int, int, int, int] = (0, 0, 0, 200)
-    glow_enabled: bool = False
-    animation_style: str = 'fade'
-
-    def copy(self) -> 'LyricStyle':
-        """创建样式副本"""
-        return LyricStyle(
-            font_size=self.font_size,
-            font_color=self.font_color,
-            highlight_color=self.highlight_color,
-            shadow_color=self.shadow_color,
-            glow_enabled=self.glow_enabled,
-            animation_style=self.animation_style
-        )
+# ============================================================================
+# Layout布局器接口导入 - 已移动到文件顶部
+# ============================================================================
 
 # ============================================================================
 # 策略模式实现
@@ -239,16 +197,20 @@ class EnhancedPreviewStrategy(LyricDisplayStrategy):
 # 主要的LyricTimeline类
 # ============================================================================
 
-class LyricTimeline:
+class LyricTimeline(LayoutElement):
     """歌词时间轴类 - 封装歌词数据和显示逻辑
 
     这是核心类，封装了歌词数据和显示策略，提供统一的接口
+    现在实现了LayoutElement接口，可以参与布局引擎的自动布局
     """
 
     def __init__(self, lyrics_data: List[Tuple[float, str]],
                  language: str = "unknown",
                  style: Optional[LyricStyle] = None,
-                 display_mode: LyricDisplayMode = LyricDisplayMode.SIMPLE_FADE):
+                 display_mode: LyricDisplayMode = LyricDisplayMode.SIMPLE_FADE,
+                 element_id: Optional[str] = None,
+                 priority: int = 10,
+                 is_flexible: bool = True):
         """初始化歌词时间轴
 
         Args:
@@ -256,12 +218,21 @@ class LyricTimeline:
             language: 语言标识
             style: 样式配置
             display_mode: 显示模式
+            element_id: 元素唯一标识（用于布局引擎）
+            priority: 布局优先级（数字越小优先级越高）
+            is_flexible: 是否可调整位置（用于自动布局）
         """
         self.lyrics_data = sorted(lyrics_data, key=lambda x: x[0])  # 按时间排序
         self.language = language
         self.style = style or LyricStyle()
         self.display_mode = display_mode
         self._strategy: Optional[LyricDisplayStrategy] = None
+
+        # LayoutElement接口属性
+        self._element_id = element_id or f"lyric_timeline_{language}_{id(self)}"
+        self._priority = priority
+        self._is_flexible = is_flexible
+
         self._setup_strategy()
 
     def _setup_strategy(self):
@@ -312,16 +283,52 @@ class LyricTimeline:
             "duration": self.lyrics_data[-1][0] if self.lyrics_data else 0,
             "display_mode": self.display_mode.value,
             "style": self.style,
-            "strategy_info": self._strategy.get_strategy_info() if self._strategy else None
+            "strategy_info": self._strategy.get_strategy_info() if self._strategy else None,
+            "element_id": self._element_id,
+            "priority": self._priority,
+            "is_flexible": self._is_flexible
         }
+
+    # ============================================================================
+    # LayoutElement接口实现
+    # ============================================================================
+
+    @property
+    def priority(self) -> int:
+        """布局优先级（数字越小优先级越高）"""
+        return self._priority
+
+    @property
+    def is_flexible(self) -> bool:
+        """是否可调整位置（用于自动布局）"""
+        return self._is_flexible
+
+    @property
+    def element_id(self) -> str:
+        """元素唯一标识"""
+        return self._element_id
+
+    def set_layout_properties(self, priority: Optional[int] = None,
+                             is_flexible: Optional[bool] = None,
+                             element_id: Optional[str] = None):
+        """设置布局属性"""
+        if priority is not None:
+            self._priority = priority
+        if is_flexible is not None:
+            self._is_flexible = is_flexible
+        if element_id is not None:
+            self._element_id = element_id
 
     @classmethod
     def from_lrc_file(cls, lrc_path: str, language: str = "unknown",
                      display_mode: LyricDisplayMode = LyricDisplayMode.SIMPLE_FADE,
-                     style: Optional[LyricStyle] = None) -> 'LyricTimeline':
+                     style: Optional[LyricStyle] = None,
+                     element_id: Optional[str] = None,
+                     priority: int = 10,
+                     is_flexible: bool = True) -> 'LyricTimeline':
         """从LRC文件创建时间轴"""
         lyrics_data = cls._parse_lrc_file(lrc_path)
-        return cls(lyrics_data, language, style, display_mode)
+        return cls(lyrics_data, language, style, display_mode, element_id, priority, is_flexible)
 
     @staticmethod
     def _parse_lrc_file(lrc_path: str) -> List[Tuple[float, str]]:
@@ -349,7 +356,9 @@ class LyricTimeline:
 # ============================================================================
 
 def create_enhanced_timeline(lyrics_data: List[Tuple[float, str]],
-                           language: str = "chinese") -> LyricTimeline:
+                           language: str = "chinese",
+                           element_id: Optional[str] = None,
+                           priority: int = 5) -> LyricTimeline:
     """创建增强预览模式的时间轴（便捷函数）"""
     style = LyricStyle(
         font_size=80,
@@ -361,17 +370,25 @@ def create_enhanced_timeline(lyrics_data: List[Tuple[float, str]],
         lyrics_data=lyrics_data,
         language=language,
         style=style,
-        display_mode=LyricDisplayMode.ENHANCED_PREVIEW
+        display_mode=LyricDisplayMode.ENHANCED_PREVIEW,
+        element_id=element_id or f"enhanced_{language}",
+        priority=priority,
+        is_flexible=True
     )
 
 def create_simple_timeline(lyrics_data: List[Tuple[float, str]],
                          language: str = "english",
-                         is_highlighted: bool = False) -> LyricTimeline:
+                         is_highlighted: bool = False,
+                         element_id: Optional[str] = None,
+                         priority: int = 10) -> LyricTimeline:
     """创建简单淡入淡出模式的时间轴（便捷函数）"""
     timeline = LyricTimeline(
         lyrics_data=lyrics_data,
         language=language,
-        display_mode=LyricDisplayMode.SIMPLE_FADE
+        display_mode=LyricDisplayMode.SIMPLE_FADE,
+        element_id=element_id or f"simple_{language}",
+        priority=priority,
+        is_flexible=True
     )
     timeline.set_display_mode(
         LyricDisplayMode.SIMPLE_FADE,
@@ -387,23 +404,29 @@ def create_bilingual_timelines(main_lyrics: List[Tuple[float, str]],
     """创建双语时间轴对（便捷函数）
 
     重构后的版本：
-    - main_timeline使用ENHANCED_PREVIEW模式
-    - aux_timeline使用SIMPLE_FADE模式，并设置合适的y位置避免重叠
+    - main_timeline使用ENHANCED_PREVIEW模式，优先级更高
+    - aux_timeline使用SIMPLE_FADE模式，优先级较低，并设置合适的y位置避免重叠
     """
-    # 主时间轴使用增强预览模式
+    # 主时间轴使用增强预览模式，优先级高
     main_timeline = LyricTimeline(
         lyrics_data=main_lyrics,
         language=main_language,
         style=LyricStyle(font_size=80, highlight_color='#FFD700'),
-        display_mode=LyricDisplayMode.ENHANCED_PREVIEW
+        display_mode=LyricDisplayMode.ENHANCED_PREVIEW,
+        element_id=f"main_{main_language}",
+        priority=1,  # 高优先级
+        is_flexible=False  # 主歌词位置固定
     )
 
-    # 副时间轴使用简单模式，显示在下方
+    # 副时间轴使用简单模式，显示在下方，优先级低
     aux_timeline = LyricTimeline(
         lyrics_data=aux_lyrics,
         language=aux_language,
         style=LyricStyle(font_size=60, font_color='white'),
-        display_mode=LyricDisplayMode.SIMPLE_FADE
+        display_mode=LyricDisplayMode.SIMPLE_FADE,
+        element_id=f"aux_{aux_language}",
+        priority=10,  # 低优先级
+        is_flexible=True  # 副歌词位置可调整
     )
     # 设置副歌词显示在下方，避免与主歌词重叠
     aux_timeline.set_display_mode(

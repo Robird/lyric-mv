@@ -13,10 +13,8 @@ from pathlib import Path
 from lrc_mv_config import load_lrc_mv_config
 
 # 导入LyricTimeline相关类
-from lyric_timeline import (
-    LyricTimeline,
-    LyricDisplayMode
-)
+from lyric_timeline import LyricTimeline, LyricDisplayMode
+from layout_engine import LayoutEngine, VerticalStackStrategy
 
 DEFAULT_WIDTH = 720
 DEFAULT_HEIGHT = 1280
@@ -166,6 +164,31 @@ class EnhancedJingwuGenerator:
 
         return clip
 
+    def _apply_layout_to_timeline(self, timeline: 'LyricTimeline', target_rect):
+        """将布局结果应用到时间轴
+
+        根据目标矩形调整时间轴的显示策略参数
+        """
+        from lyric_timeline import LyricDisplayMode
+
+        if timeline.display_mode == LyricDisplayMode.SIMPLE_FADE:
+            # 对于简单模式，调整Y位置
+            timeline.set_display_mode(
+                LyricDisplayMode.SIMPLE_FADE,
+                y_position=target_rect.y + target_rect.height // 2,
+                is_highlighted=getattr(timeline._strategy, 'is_highlighted', False)
+            )
+        elif timeline.display_mode == LyricDisplayMode.ENHANCED_PREVIEW:
+            # 对于增强预览模式，调整偏移量
+            center_y = target_rect.y + target_rect.height // 2
+            timeline.set_display_mode(
+                LyricDisplayMode.ENHANCED_PREVIEW,
+                current_y_offset=center_y - self.height // 2 - 50,
+                preview_y_offset=center_y - self.height // 2 + 80
+            )
+
+        print(f"  已应用布局到 {timeline.element_id}: Y={target_rect.y}, H={target_rect.height}")
+
     # --- BEGIN PRIVATE HELPER METHODS ---
     def _create_video_background(
         self,
@@ -253,8 +276,13 @@ class EnhancedJingwuGenerator:
                                      audio_path: str = "",
                                      output_path: str = "",
                                      background_image: Optional[str] = None,
-                                     t_max_sec: float = float('inf')) -> bool:
-        """使用LyricTimeline对象生成视频的核心方法"""
+                                     t_max_sec: float = float('inf'),
+                                     use_layout_engine: bool = True) -> bool:
+        """使用LyricTimeline对象生成视频的核心方法
+
+        Args:
+            use_layout_engine: 是否使用布局引擎进行自动布局
+        """
 
         # 确定生成模式
         is_bilingual_mode = aux_timeline is not None
@@ -280,16 +308,50 @@ class EnhancedJingwuGenerator:
             if aux_timeline:
                 print(f"副时间轴信息: {aux_timeline.get_info()}")
 
-            # 计算布局信息
-            main_rect = main_timeline.calculate_required_rect(self.width, self.height)
-            print(f"主时间轴所需区域: {main_rect}")
+            # 布局计算和冲突检测
+            if use_layout_engine and aux_timeline:
+                print("使用布局引擎进行自动布局...")
 
-            if aux_timeline:
-                aux_rect = aux_timeline.calculate_required_rect(self.width, self.height)
-                print(f"副时间轴所需区域: {aux_rect}")
+                # 创建布局引擎
+                layout_engine = LayoutEngine(VerticalStackStrategy(spacing=30))
 
-                if main_rect.overlaps_with(aux_rect):
-                    print("警告: 时间轴显示区域重叠，可能需要调整布局")
+                # 添加时间轴元素
+                layout_engine.add_element(main_timeline)
+                layout_engine.add_element(aux_timeline)
+
+                # 检测冲突
+                conflicts = layout_engine.detect_conflicts(self.width, self.height)
+                if conflicts:
+                    print("检测到布局冲突:")
+                    for conflict in conflicts:
+                        print(f"  - {conflict}")
+
+                    # 计算自动布局
+                    layout_result = layout_engine.calculate_layout(self.width, self.height)
+                    print("应用自动布局解决方案:")
+
+                    # 应用布局结果到时间轴
+                    for element_id, rect in layout_result.element_positions.items():
+                        print(f"  - {element_id}: {rect}")
+
+                        # 根据element_id找到对应的timeline并更新其策略
+                        if element_id == main_timeline.element_id:
+                            self._apply_layout_to_timeline(main_timeline, rect)
+                        elif aux_timeline and element_id == aux_timeline.element_id:
+                            self._apply_layout_to_timeline(aux_timeline, rect)
+                else:
+                    print("✅ 无布局冲突，使用原始布局")
+            else:
+                # 传统布局检测（向后兼容）
+                main_rect = main_timeline.calculate_required_rect(self.width, self.height)
+                print(f"主时间轴所需区域: {main_rect}")
+
+                if aux_timeline:
+                    aux_rect = aux_timeline.calculate_required_rect(self.width, self.height)
+                    print(f"副时间轴所需区域: {aux_rect}")
+
+                    if main_rect.overlaps_with(aux_rect):
+                        print("警告: 时间轴显示区域重叠，可能需要调整布局")
 
             # 背景处理（保持原有逻辑）
             print("创建背景...")
