@@ -93,20 +93,41 @@ class SimpleFadeStrategy(LyricDisplayStrategy):
 
     def generate_clips(self, timeline: 'LyricTimeline',
                       generator: Any, duration: float) -> List[ImageClip]:
-        """生成简单淡入淡出片段"""
+        """生成简单淡入淡出片段
+
+        Args:
+            timeline: 歌词时间轴对象
+            generator: 视频生成器对象
+            duration: 视频总时长限制
+
+        Returns:
+            生成的视频片段列表，所有片段都严格遵守时长限制
+        """
         clips = []
         lyrics_data = timeline.get_filtered_lyrics(duration)
         rect = self.calculate_required_rect(timeline, generator.width, generator.height)
 
         for i, (start_time, text) in enumerate(lyrics_data):
+            # 计算结束时间，确保不超过总时长限制
             if i < len(lyrics_data) - 1:
-                end_time = lyrics_data[i + 1][0]
+                end_time = min(lyrics_data[i + 1][0], duration)
             else:
                 end_time = duration
 
+            # 确保开始时间在时长限制内
+            if start_time >= duration:
+                print(f"   跳过歌词（开始时间超出限制 {start_time:.2f}s >= {duration:.2f}s）: '{text}'")
+                continue
+
             lyric_duration = end_time - start_time
             if lyric_duration <= 0.01:
+                print(f"   跳过歌词（时长过短 {lyric_duration:.2f}s）: '{text}'")
                 continue
+
+            # 最终验证：确保片段不会超出时长限制
+            if start_time + lyric_duration > duration:
+                lyric_duration = duration - start_time
+                print(f"   调整歌词时长以符合限制: '{text}' -> {lyric_duration:.2f}s")
 
             clip = generator.create_lyric_clip_with_animation(
                 text, start_time, lyric_duration,
@@ -153,21 +174,40 @@ class EnhancedPreviewStrategy(LyricDisplayStrategy):
         """生成增强预览片段
 
         这里封装了原有enhanced_generator.py中的增强模式逻辑
+
+        Args:
+            timeline: 歌词时间轴对象
+            generator: 视频生成器对象
+            duration: 视频总时长限制
+
+        Returns:
+            生成的视频片段列表，包括当前歌词和预览歌词，所有片段都严格遵守时长限制
         """
         clips = []
         lyrics_data = timeline.get_filtered_lyrics(duration)
         center_y = generator.height // 2
 
         for i, (start_time, text) in enumerate(lyrics_data):
+            # 计算结束时间，确保不超过总时长限制
             if i < len(lyrics_data) - 1:
-                end_time = lyrics_data[i + 1][0]
+                end_time = min(lyrics_data[i + 1][0], duration)
             else:
                 end_time = duration
+
+            # 确保开始时间在时长限制内
+            if start_time >= duration:
+                print(f"   跳过主歌词（开始时间超出限制 {start_time:.2f}s >= {duration:.2f}s）: '{text}'")
+                continue
 
             lyric_duration = end_time - start_time
             if lyric_duration <= 0.01:
                 print(f"   跳过主歌词（时长过短 {lyric_duration:.2f}s）: '{text}'")
                 continue
+
+            # 最终验证：确保片段不会超出时长限制
+            if start_time + lyric_duration > duration:
+                lyric_duration = duration - start_time
+                print(f"   调整主歌词时长以符合限制: '{text}' -> {lyric_duration:.2f}s")
 
             # 当前歌词（高亮）- 对应原来的current_clip
             current_clip = generator.create_lyric_clip_with_animation(
@@ -181,13 +221,15 @@ class EnhancedPreviewStrategy(LyricDisplayStrategy):
             # 下一句预览（非高亮）- 对应原来的next_clip
             if i < len(lyrics_data) - 1:
                 next_text = lyrics_data[i + 1][1]
-                preview_clip = generator.create_lyric_clip_with_animation(
-                    next_text, start_time, lyric_duration,
-                    is_highlighted=False,
-                    y_position=center_y + self.preview_y_offset,
-                    animation='fade'  # 预览总是使用fade动画
-                )
-                clips.append(preview_clip)
+                # 预览歌词也需要遵守时长限制
+                if start_time + lyric_duration <= duration:
+                    preview_clip = generator.create_lyric_clip_with_animation(
+                        next_text, start_time, lyric_duration,
+                        is_highlighted=False,
+                        y_position=center_y + self.preview_y_offset,
+                        animation='fade'  # 预览总是使用fade动画
+                    )
+                    clips.append(preview_clip)
 
         return clips
 
@@ -260,7 +302,14 @@ class LyricTimeline(LayoutElement):
             raise ValueError(f"不支持的显示模式: {mode}")
 
     def get_filtered_lyrics(self, max_duration: float) -> List[Tuple[float, str]]:
-        """获取过滤后的歌词数据"""
+        """获取过滤后的歌词数据
+
+        Args:
+            max_duration: 最大时长限制
+
+        Returns:
+            过滤后的歌词数据，确保所有歌词的开始时间都在时长限制内
+        """
         return [(t, text) for t, text in self.lyrics_data if t < max_duration]
 
     def calculate_required_rect(self, video_width: int, video_height: int) -> LyricRect:

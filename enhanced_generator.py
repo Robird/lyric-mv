@@ -189,6 +189,41 @@ class EnhancedJingwuGenerator:
 
         print(f"  已应用布局到 {timeline.element_id}: Y={target_rect.y}, H={target_rect.height}")
 
+    def _validate_clips_duration(self, clips: List[ImageClip], max_duration: float) -> List[ImageClip]:
+        """验证并修正片段时长，确保所有片段都在时长限制内
+
+        Args:
+            clips: 待验证的片段列表
+            max_duration: 最大时长限制
+
+        Returns:
+            验证并修正后的片段列表
+        """
+        validated_clips = []
+
+        for clip in clips:
+            start_time = getattr(clip, 'start', 0)
+            duration = getattr(clip, 'duration', 0)
+
+            # 检查片段是否超出时长限制
+            if start_time >= max_duration:
+                print(f"   移除超出时长限制的片段: start={start_time:.2f}s >= {max_duration:.2f}s")
+                continue
+
+            if start_time + duration > max_duration:
+                # 裁剪片段以符合时长限制
+                new_duration = max_duration - start_time
+                if new_duration > 0.01:  # 只保留有意义的片段
+                    clip = clip.subclip(0, new_duration)
+                    print(f"   裁剪片段时长: {duration:.2f}s -> {new_duration:.2f}s")
+                    validated_clips.append(clip)
+                else:
+                    print(f"   移除过短的片段: duration={new_duration:.2f}s")
+            else:
+                validated_clips.append(clip)
+
+        return validated_clips
+
     # --- BEGIN PRIVATE HELPER METHODS ---
     def _create_video_background(
         self,
@@ -361,12 +396,20 @@ class EnhancedJingwuGenerator:
             # 使用LyricTimeline生成片段
             print("生成歌词片段...")
             main_clips = main_timeline.generate_clips(self, duration)
+
+            # 验证主歌词片段时长
+            print("验证主歌词片段时长...")
+            main_clips = self._validate_clips_duration(main_clips, duration)
             all_video_clips.extend(main_clips)
 
             num_lyric_clips = len(main_clips)
 
             if aux_timeline:
                 aux_clips = aux_timeline.generate_clips(self, duration)
+
+                # 验证副歌词片段时长
+                print("验证副歌词片段时长...")
+                aux_clips = self._validate_clips_duration(aux_clips, duration)
                 all_video_clips.extend(aux_clips)
                 num_lyric_clips += len(aux_clips)
 
