@@ -137,11 +137,13 @@ class SimpleFadeStrategy(LyricDisplayStrategy):
             # 重新组合为文本（保持与渲染器的接口兼容）
             text = '\n'.join(lines)
 
+            # 传递字体大小到生成器
             clip = generator.create_lyric_clip_with_animation(
                 text, start_time, lyric_duration,
                 is_highlighted=self.is_highlighted,
                 y_position=rect.y + rect.height // 2,
-                animation=timeline.style.animation_style
+                animation=timeline.style.animation_style,
+                font_size=timeline.style.font_size
             )
             clips.append(clip)
 
@@ -227,12 +229,13 @@ class EnhancedPreviewStrategy(LyricDisplayStrategy):
             # 重新组合为文本（保持与渲染器的接口兼容）
             text = '\n'.join(lines)
 
-            # 当前歌词（高亮）- 对应原来的current_clip
+            # 当前歌词（高亮）- 传递字体大小到生成器
             current_clip = generator.create_lyric_clip_with_animation(
                 text, start_time, lyric_duration,
                 is_highlighted=True,
                 y_position=center_y + self.current_y_offset,
-                animation=timeline.style.animation_style
+                animation=timeline.style.animation_style,
+                font_size=timeline.style.font_size
             )
             clips.append(current_clip)
 
@@ -242,11 +245,14 @@ class EnhancedPreviewStrategy(LyricDisplayStrategy):
                 next_text = '\n'.join(next_lines)  # 重新组合下一句
                 # 预览歌词也需要遵守时长限制
                 if start_time + lyric_duration <= duration:
+                    # 预览歌词使用稍小的字体
+                    preview_font_size = max(10, timeline.style.font_size - 20)
                     preview_clip = generator.create_lyric_clip_with_animation(
                         next_text, start_time, lyric_duration,
                         is_highlighted=False,
                         y_position=center_y + self.preview_y_offset,
-                        animation='fade'  # 预览总是使用fade动画
+                        animation='fade',  # 预览总是使用fade动画
+                        font_size=preview_font_size
                     )
                     clips.append(preview_clip)
 

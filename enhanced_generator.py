@@ -159,12 +159,15 @@ class EnhancedJingwuGenerator:
 
     def create_lyric_clip_with_animation(self, text: str, start_time: float, duration: float,
                                        is_highlighted: bool = False, y_position: Optional[int] = None,
-                                       animation: str = 'fade') -> ImageClip:
+                                       animation: str = 'fade', font_size: Optional[int] = None) -> ImageClip:
         """创建带动画效果的歌词片段"""
         if y_position is None:
             y_position = self.height // 2
 
-        font_size = self.default_font_size if is_highlighted else self.default_font_size - 20
+        # 使用传入的字体大小，如果没有则使用默认值
+        if font_size is None:
+            font_size = self.default_font_size if is_highlighted else self.default_font_size - 20
+
         color = self.highlight_color if is_highlighted else self.default_font_color
 
         text_img_array = self.create_enhanced_text_image(
@@ -281,7 +284,7 @@ class EnhancedJingwuGenerator:
     ):
         """(Helper) 合成所有片段并导出视频。"""
         print("合成视频...")
-        final_video = CompositeVideoClip(all_clips)
+        final_video:CompositeVideoClip = CompositeVideoClip(all_clips)
         final_video = final_video.set_audio(audio_clip)
         final_video = final_video.set_fps(self.fps)
 
@@ -485,20 +488,43 @@ def demo_enhanced_features(config_path: Path, t_max_sec: float = float('inf')):
 
     # 创建主时间轴 - 总是使用增强预览模式
     main_lrc_path = config.get_main_lrc_path()
+
+    # 从配置中获取字体大小，如果没有指定则使用默认值
+    main_font_size = config.main_lrc.font_size or 80
+    print(f"主歌词字体大小: {main_font_size}")
+    from layout_types import LyricStyle
+    main_style = LyricStyle(
+        font_size=main_font_size,
+        highlight_color='#FFD700',
+        glow_enabled=True
+    )
+
     main_timeline = LyricTimeline.from_lrc_file(
         str(main_lrc_path),
         language="chinese",
-        display_mode=LyricDisplayMode.ENHANCED_PREVIEW
+        display_mode=LyricDisplayMode.ENHANCED_PREVIEW,
+        style=main_style
     )
 
     aux_timeline = None
     if config.aux_lrc:
         # 创建副时间轴 - 使用简单模式，显示在下方
         aux_lrc_path = config.get_aux_lrc_path()
+
+        # 从配置中获取副歌词字体大小，如果没有指定则使用默认值
+        aux_font_size = config.aux_lrc.font_size or 60
+        print(f"副歌词字体大小: {aux_font_size}")
+        aux_style = LyricStyle(
+            font_size=aux_font_size,
+            font_color='white',
+            highlight_color='#FFD700'
+        )
+
         aux_timeline = LyricTimeline.from_lrc_file(
             str(aux_lrc_path),
             language="english",
-            display_mode=LyricDisplayMode.SIMPLE_FADE
+            display_mode=LyricDisplayMode.SIMPLE_FADE,
+            style=aux_style
         )
         # 设置副歌词显示位置，避免与主歌词重叠
         aux_timeline.set_display_mode(
@@ -545,4 +571,4 @@ def demo_enhanced_features(config_path: Path, t_max_sec: float = float('inf')):
     return success
 
 if __name__ == "__main__":
-    demo_enhanced_features(Path(r"精武英雄\lrc-mv.yaml"), t_max_sec=60.0)
+    demo_enhanced_features(Path(r"精武英雄\lrc-mv.yaml"), t_max_sec=20.0)
