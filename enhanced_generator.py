@@ -369,23 +369,28 @@ def demo_enhanced_features(config_path: Path, t_max_sec: float = float('inf')):
     # 使用LyricTimeline OOP接口
     print("使用LyricTimeline OOP接口")
 
-    # 创建主时间轴
+    # 创建主时间轴 - 总是使用增强预览模式
     main_lrc_path = config.get_main_lrc_path()
     main_timeline = LyricTimeline.from_lrc_file(
         str(main_lrc_path),
         language="chinese",
-        display_mode=LyricDisplayMode.ENHANCED_PREVIEW if not config.aux_lrc
-                    else LyricDisplayMode.BILINGUAL_SYNC
+        display_mode=LyricDisplayMode.ENHANCED_PREVIEW
     )
 
     aux_timeline = None
     if config.aux_lrc:
-        # 创建副时间轴
+        # 创建副时间轴 - 使用简单模式，显示在下方
         aux_lrc_path = config.get_aux_lrc_path()
         aux_timeline = LyricTimeline.from_lrc_file(
             str(aux_lrc_path),
             language="english",
-            display_mode=LyricDisplayMode.BILINGUAL_SYNC
+            display_mode=LyricDisplayMode.SIMPLE_FADE
+        )
+        # 设置副歌词显示位置，避免与主歌词重叠
+        aux_timeline.set_display_mode(
+            LyricDisplayMode.SIMPLE_FADE,
+            y_position=config.height // 2 + 200,  # 显示在更下方，避免重叠
+            is_highlighted=False
         )
 
     # 显示时间轴信息

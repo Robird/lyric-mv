@@ -11,10 +11,9 @@ LyricTimeline核心类型实现
 
 import re
 from abc import ABC, abstractmethod
-from typing import List, Tuple, Optional, Dict, Any, Union
+from typing import List, Tuple, Optional, Dict, Any
 from dataclasses import dataclass
 from enum import Enum
-import numpy as np
 from moviepy.editor import ImageClip
 
 # ============================================================================
@@ -25,7 +24,6 @@ class LyricDisplayMode(Enum):
     """歌词显示模式枚举"""
     SIMPLE_FADE = "simple_fade"           # 简单淡入淡出
     ENHANCED_PREVIEW = "enhanced_preview"  # 增强模式：当前+预览
-    BILINGUAL_SYNC = "bilingual_sync"     # 双语同步显示
     KARAOKE_STYLE = "karaoke_style"       # 卡拉OK样式（未来扩展）
 
 @dataclass
@@ -235,64 +233,7 @@ class EnhancedPreviewStrategy(LyricDisplayStrategy):
 
         return clips
 
-class BilingualSyncStrategy(LyricDisplayStrategy):
-    """双语同步显示策略
 
-    用于双语歌词的同步显示
-    """
-
-    def __init__(self, main_y_offset: int = -80, aux_y_offset: int = 60):
-        self.main_y_offset = main_y_offset
-        self.aux_y_offset = aux_y_offset
-
-    def calculate_required_rect(self, timeline: 'LyricTimeline',
-                              video_width: int, video_height: int) -> LyricRect:
-        """计算双语显示所需区域"""
-        font_size = timeline.style.font_size
-        text_height = int(font_size * 1.2)
-
-        # 需要容纳主歌词和副歌词
-        total_height = abs(self.main_y_offset) + abs(self.aux_y_offset) + text_height * 2
-        center_y = video_height // 2
-
-        return LyricRect(
-            x=0,
-            y=center_y - total_height // 2,
-            width=video_width,
-            height=total_height
-        )
-
-    def generate_clips(self, timeline: 'LyricTimeline',
-                      generator: Any, duration: float) -> List[ImageClip]:
-        """生成双语同步片段"""
-        clips = []
-        lyrics_data = timeline.get_filtered_lyrics(duration)
-        center_y = generator.height // 2
-
-        for i, (start_time, text) in enumerate(lyrics_data):
-            if i < len(lyrics_data) - 1:
-                end_time = lyrics_data[i + 1][0]
-            else:
-                end_time = duration
-
-            lyric_duration = end_time - start_time
-            if lyric_duration <= 0.01:
-                continue
-
-            # 根据timeline的语言决定是主歌词还是副歌词
-            is_main = timeline.language in ['chinese', 'main']
-            y_offset = self.main_y_offset if is_main else self.aux_y_offset
-            is_highlighted = is_main
-
-            clip = generator.create_lyric_clip_with_animation(
-                text, start_time, lyric_duration,
-                is_highlighted=is_highlighted,
-                y_position=center_y + y_offset,
-                animation=timeline.style.animation_style
-            )
-            clips.append(clip)
-
-        return clips
 
 # ============================================================================
 # 主要的LyricTimeline类
@@ -329,8 +270,6 @@ class LyricTimeline:
             self._strategy = SimpleFadeStrategy()
         elif self.display_mode == LyricDisplayMode.ENHANCED_PREVIEW:
             self._strategy = EnhancedPreviewStrategy()
-        elif self.display_mode == LyricDisplayMode.BILINGUAL_SYNC:
-            self._strategy = BilingualSyncStrategy()
         else:
             raise ValueError(f"不支持的显示模式: {self.display_mode}")
 
@@ -346,8 +285,6 @@ class LyricTimeline:
             self._strategy = SimpleFadeStrategy(**kwargs)
         elif mode == LyricDisplayMode.ENHANCED_PREVIEW:
             self._strategy = EnhancedPreviewStrategy(**kwargs)
-        elif mode == LyricDisplayMode.BILINGUAL_SYNC:
-            self._strategy = BilingualSyncStrategy(**kwargs)
         else:
             raise ValueError(f"不支持的显示模式: {mode}")
 
@@ -445,30 +382,34 @@ def create_simple_timeline(lyrics_data: List[Tuple[float, str]],
 def create_bilingual_timelines(main_lyrics: List[Tuple[float, str]],
                              aux_lyrics: List[Tuple[float, str]],
                              main_language: str = "chinese",
-                             aux_language: str = "english") -> Tuple[LyricTimeline, LyricTimeline]:
-    """创建双语时间轴对（便捷函数）"""
+                             aux_language: str = "english",
+                             video_height: int = 720) -> Tuple[LyricTimeline, LyricTimeline]:
+    """创建双语时间轴对（便捷函数）
+
+    重构后的版本：
+    - main_timeline使用ENHANCED_PREVIEW模式
+    - aux_timeline使用SIMPLE_FADE模式，并设置合适的y位置避免重叠
+    """
+    # 主时间轴使用增强预览模式
     main_timeline = LyricTimeline(
         lyrics_data=main_lyrics,
         language=main_language,
         style=LyricStyle(font_size=80, highlight_color='#FFD700'),
-        display_mode=LyricDisplayMode.BILINGUAL_SYNC
-    )
-    main_timeline.set_display_mode(
-        LyricDisplayMode.BILINGUAL_SYNC,
-        main_y_offset=-80,
-        aux_y_offset=60
+        display_mode=LyricDisplayMode.ENHANCED_PREVIEW
     )
 
+    # 副时间轴使用简单模式，显示在下方
     aux_timeline = LyricTimeline(
         lyrics_data=aux_lyrics,
         language=aux_language,
         style=LyricStyle(font_size=60, font_color='white'),
-        display_mode=LyricDisplayMode.BILINGUAL_SYNC
+        display_mode=LyricDisplayMode.SIMPLE_FADE
     )
+    # 设置副歌词显示在下方，避免与主歌词重叠
     aux_timeline.set_display_mode(
-        LyricDisplayMode.BILINGUAL_SYNC,
-        main_y_offset=-80,
-        aux_y_offset=60
+        LyricDisplayMode.SIMPLE_FADE,
+        y_position=video_height // 2 + 100,  # 显示在中心下方
+        is_highlighted=False
     )
 
     return main_timeline, aux_timeline
