@@ -80,7 +80,7 @@ class EnhancedJingwuGenerator:
     def create_enhanced_text_image(self, text: str, font_size: int, color: str,
                                  width: int, height: int, y_position: int,
                                  glow: bool = False) -> np.ndarray:
-        """创建增强文字图像，支持发光效果"""
+        """创建增强文字图像，支持发光效果和多行文本"""
         scale = 2
         scaled_width = width * scale
         scaled_height = height * scale
@@ -104,26 +104,49 @@ class EnhancedJingwuGenerator:
         except OSError:
             font = ImageFont.load_default()
 
-        bbox = draw.textbbox((0, 0), text, font=font)
-        text_width = bbox[2] - bbox[0]
-        text_height = bbox[3] - bbox[1]
-        x = (scaled_width - text_width) // 2
-        y = y_position * scale - text_height // 2
+        # 处理多行文本
+        lines = text.split('\n')
+        line_height = int(scaled_font_size * 1.2)  # 行高为字体大小的1.2倍
 
-        if glow and color == '#FFD700':
-            for offset in range(8, 0, -1):
-                for dx in range(-offset, offset + 1):
-                    for dy in range(-offset, offset + 1):
-                        if dx * dx + dy * dy <= offset * offset:
-                            alpha = max(0, 120 - offset * 15)
-                            glow_rgba = (255, 215, 0, alpha)
-                            draw.text((x + dx, y + dy), text, fill=glow_rgba, font=font)
+        # 计算总文本高度和每行的宽度
+        total_text_height = len(lines) * line_height
+        line_widths = []
+        for line in lines:
+            if line.strip():  # 跳过空行
+                bbox = draw.textbbox((0, 0), line, font=font)
+                line_widths.append(bbox[2] - bbox[0])
+            else:
+                line_widths.append(0)
 
-        shadow_color_val = (0, 0, 0, 200)
-        draw.text((x + 3 * scale, y + 3 * scale), text, fill=shadow_color_val, font=font)
+        # 计算起始Y位置（居中对齐）
+        start_y = y_position * scale - total_text_height // 2
 
-        main_color = (255, 215, 0, 255) if color == '#FFD700' else (255, 255, 255, 255)
-        draw.text((x, y), text, fill=main_color, font=font)
+        # 渲染每一行
+        for i, line in enumerate(lines):
+            if not line.strip():  # 跳过空行
+                continue
+
+            line_width = line_widths[i]
+            x = (scaled_width - line_width) // 2  # 水平居中
+            y = start_y + i * line_height
+
+            # 发光效果
+            if glow and color == '#FFD700':
+                for offset in range(8, 0, -1):
+                    for dx in range(-offset, offset + 1):
+                        for dy in range(-offset, offset + 1):
+                            if dx * dx + dy * dy <= offset * offset:
+                                alpha = max(0, 120 - offset * 15)
+                                glow_rgba = (255, 215, 0, alpha)
+                                draw.text((x + dx, y + dy), line, fill=glow_rgba, font=font)
+
+            # 阴影效果
+            shadow_color_val = (0, 0, 0, 200)
+            draw.text((x + 3 * scale, y + 3 * scale), line, fill=shadow_color_val, font=font)
+
+            # 主文字
+            main_color = (255, 215, 0, 255) if color == '#FFD700' else (255, 255, 255, 255)
+            draw.text((x, y), line, fill=main_color, font=font)
 
         # PIL版本兼容性处理
         try:

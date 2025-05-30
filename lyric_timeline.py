@@ -77,18 +77,25 @@ class SimpleFadeStrategy(LyricDisplayStrategy):
 
     def calculate_required_rect(self, timeline: 'LyricTimeline',
                               video_width: int, video_height: int) -> LyricRect:
-        """计算简单显示所需区域"""
+        """计算简单显示所需区域，支持多行文本"""
         y_pos = self.y_position or (video_height // 2)
         font_size = timeline.style.font_size
 
+        # 计算最大行数（检查所有歌词中的最大行数）
+        max_lines = 1
+        for _, text in timeline.lyrics_data:
+            lines = text.split('\n')
+            max_lines = max(max_lines, len([line for line in lines if line.strip()]))
+
         # 估算文字高度（字体大小 * 1.2 作为行高）
-        text_height = int(font_size * 1.2)
+        line_height = int(font_size * 1.2)
+        total_height = max_lines * line_height
 
         return LyricRect(
             x=0,
-            y=y_pos - text_height // 2,
+            y=y_pos - total_height // 2,
             width=video_width,
-            height=text_height
+            height=total_height
         )
 
     def generate_clips(self, timeline: 'LyricTimeline',
@@ -154,12 +161,21 @@ class EnhancedPreviewStrategy(LyricDisplayStrategy):
 
     def calculate_required_rect(self, timeline: 'LyricTimeline',
                               video_width: int, video_height: int) -> LyricRect:
-        """计算增强预览所需区域"""
+        """计算增强预览所需区域，支持多行文本"""
         font_size = timeline.style.font_size
-        text_height = int(font_size * 1.2)
+        line_height = int(font_size * 1.2)
 
-        # 需要容纳当前歌词和预览歌词
-        total_height = abs(self.current_y_offset) + abs(self.preview_y_offset) + text_height * 2
+        # 计算最大行数（检查所有歌词中的最大行数）
+        max_lines = 1
+        for _, text in timeline.lyrics_data:
+            lines = text.split('\n')
+            max_lines = max(max_lines, len([line for line in lines if line.strip()]))
+
+        # 单个歌词块的高度
+        single_lyric_height = max_lines * line_height
+
+        # 需要容纳当前歌词和预览歌词，考虑偏移量
+        total_height = abs(self.current_y_offset) + abs(self.preview_y_offset) + single_lyric_height * 2
         center_y = video_height // 2
 
         return LyricRect(
@@ -381,8 +397,9 @@ class LyricTimeline(LayoutElement):
 
     @staticmethod
     def _parse_lrc_file(lrc_path: str) -> List[Tuple[float, str]]:
-        """解析LRC文件（复用现有逻辑）"""
-        lyrics = []
+        """解析LRC文件，支持相同时间点的多条记录合并为多行文本"""
+        lyrics_dict = {}  # 使用字典来收集相同时间点的歌词
+
         with open(lrc_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
 
@@ -395,9 +412,16 @@ class LyricTimeline(LayoutElement):
                 centiseconds = int(time_match.group(3))
                 text = time_match.group(4).strip()
                 timestamp = minutes * 60 + seconds + centiseconds / 100
-                if text:
-                    lyrics.append((timestamp, text))
 
+                if text:  # 只处理非空文本
+                    if timestamp in lyrics_dict:
+                        # 相同时间点的歌词用换行符连接
+                        lyrics_dict[timestamp] += '\n' + text
+                    else:
+                        lyrics_dict[timestamp] = text
+
+        # 转换为列表并排序
+        lyrics = [(timestamp, text) for timestamp, text in lyrics_dict.items()]
         return sorted(lyrics, key=lambda x: x[0])
 
 # ============================================================================
