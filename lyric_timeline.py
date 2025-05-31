@@ -31,6 +31,94 @@ from font_cache import FontCache, detect_text_language
 ANIMATION_VERTICAL_OFFSET = 30  # 纵向动画偏移量（像素）
 ANIMATION_LAYOUT_PADDING = ANIMATION_VERTICAL_OFFSET   # 布局时预留的动画空间（像素）
 
+# ============================================================================
+# 动画系统实现 - BasicAnimation类
+# ============================================================================
+
+class BasicAnimation:
+    """基础动画类 - 参数化建模替代字符串枚举
+    
+    使用OOP方法定义动画效果，支持：
+    - 参数化的y偏移量配置
+    - 动画进度计算
+    - 属性字典的in-place修改
+    """
+    
+    def __init__(self, y_offset_0: float, y_offset_1: float, alpha_0: float = 0.0, alpha_1: float = 1.0):
+        """初始化动画参数
+        
+        Args:
+            y_offset_0: 起始Y偏移量（animation_progress=0时的偏移）
+            y_offset_1: 结束Y偏移量（animation_progress=1时的偏移）
+            alpha_0: 起始透明度（animation_progress=0时的alpha）
+            alpha_1: 结束透明度（animation_progress=1时的alpha）
+        """
+        self.y_offset_0 = y_offset_0
+        self.y_offset_1 = y_offset_1
+        self.alpha_0 = alpha_0
+        self.alpha_1 = alpha_1
+    
+    def get_y_offset(self, progress: float) -> float:
+        """根据动画进度计算Y偏移量
+        
+        Args:
+            progress: 动画进度 (0.0-1.0)
+            
+        Returns:
+            当前的Y偏移量
+        """
+        progress = max(0.0, min(1.0, progress))  # 确保在有效范围内
+        return self.y_offset_0 + (self.y_offset_1 - self.y_offset_0) * progress
+    
+    def get_alpha(self, progress: float) -> float:
+        """根据动画进度计算alpha值
+        
+        Args:
+            progress: 动画进度 (0.0-1.0)
+            
+        Returns:
+            当前的alpha值
+        """
+        progress = max(0.0, min(1.0, progress))  # 确保在有效范围内
+        return self.alpha_0 + (self.alpha_1 - self.alpha_0) * progress
+    
+    def effect(self, properties: Dict[str, Any], progress: float) -> None:
+        """应用动画效果到属性字典（in-place修改）
+        
+        Args:
+            properties: 歌词属性字典，将被直接修改
+        """
+        properties['y_offset'] = self.get_y_offset(progress)
+        properties['alpha'] = self.get_alpha(progress)
+
+# 动画预设 - 避免运行时对象创建
+class AnimationPresets:
+    """动画预设集合 - 预定义常用的动画配置"""
+    
+    # 淡入动画：从下方30像素淡入到稳定位置
+    FADE_IN = BasicAnimation(
+        y_offset_0=ANIMATION_VERTICAL_OFFSET,   # 从下方30像素开始
+        y_offset_1=0.0,                         # 移动到稳定位置
+        alpha_0=0.0,                           # 从完全透明开始
+        alpha_1=1.0                            # 渐变到完全不透明
+    )
+    
+    # 淡出动画：从稳定位置继续向上移动30像素
+    FADE_OUT = BasicAnimation(
+        y_offset_0=0.0,                         # 从稳定位置开始
+        y_offset_1=-ANIMATION_VERTICAL_OFFSET,  # 继续向上移动30像素
+        alpha_0=1.0,                           # 从完全不透明开始
+        alpha_1=0.0                            # 渐变到完全透明
+    )
+    
+    # 稳定显示：无移动，完全不透明
+    STABLE = BasicAnimation(
+        y_offset_0=0.0,                        # 稳定位置
+        y_offset_1=0.0,                        # 稳定位置
+        alpha_0=1.0,                          # 完全不透明
+        alpha_1=1.0                           # 完全不透明
+    )
+
 class LyricDisplayMode(Enum):
     """歌词显示模式枚举"""
     SIMPLE_FADE = "simple_fade"           # 简单淡入淡出
@@ -286,7 +374,7 @@ class LyricTimeline(LayoutElement):
         重构后的版本：
         - 支持淡入淡出时前后歌词同时存在
         - 提前开始淡入动画（从start_time - animation_duration开始）
-        - 直接返回包含动画进度的歌词列表
+        - 返回包含(动画进度,BasicAnimation实例)的歌词列表
 
         Args:
             t: 时间点（秒）
@@ -294,7 +382,7 @@ class LyricTimeline(LayoutElement):
             animation_duration: 动画持续时间
 
         Returns:
-            歌词内容列表，每个元素包含text, start_time, duration, animation_progress等信息
+            歌词内容列表，每个元素包含text, start_time, duration, animation_progress, animation等信息
         """
         active_lyrics = []
 
@@ -303,67 +391,36 @@ class LyricTimeline(LayoutElement):
 
             # 计算有效显示时间范围（包括提前淡入）
             fade_in_start = start_time - animation_duration
+            fade_in_end = start_time
+            fade_out_start = start_time + duration - animation_duration
             fade_out_end = start_time + duration
 
             # 检查当前时间是否在显示范围内
             if fade_in_start <= t < fade_out_end:
                 # 计算动画进度
-                animation_progress = self._calculate_animation_progress(
-                    t, start_time, duration, animation_duration
-                )
-
-                if animation_progress >= 0:  # 包含动画进度为0的歌词（淡入开始瞬间）
-                    active_lyrics.append({
-                        'text': text,
-                        'start_time': start_time,
-                        'duration': duration,
-                        'animation_progress': animation_progress,
-                        'index': i,
-                        'language': self.language,
-                        'style': self.style
-                    })
+                if t < fade_in_end:
+                    animation_progress = (t - fade_in_start) / animation_duration
+                    animation = AnimationPresets.FADE_IN
+                elif t >= fade_out_start:
+                    animation_progress = (t - fade_out_start) / animation_duration
+                    animation = AnimationPresets.FADE_OUT
+                else:
+                    animation_progress = 0.5
+                    animation = AnimationPresets.STABLE
+                                    
+                active_lyrics.append({
+                    'text': text,
+                    'start_time': start_time,
+                    'duration': duration,
+                    'animation': (animation_progress,animation),
+                    'index': i,
+                    'language': self.language,
+                    'style': self.style
+                })
 
         # 按开始时间排序，确保稳定的渲染顺序
         active_lyrics.sort(key=lambda x: x['start_time'])
         return active_lyrics
-
-    def _calculate_animation_progress(self, t: float, start_time: float,
-                                    duration: float, animation_duration: float = 0.3) -> float:
-        """计算动画进度（重构版本，支持提前淡入）
-
-        Args:
-            t: 当前时间
-            start_time: 歌词开始时间
-            duration: 歌词持续时间
-            animation_duration: 动画持续时间
-
-        Returns:
-            动画进度 (0.0-1.0)
-        """
-        # 提前淡入：从start_time - animation_duration开始
-        fade_in_start = start_time - animation_duration
-        fade_out_end = start_time + duration
-
-        if t < fade_in_start or t >= fade_out_end:
-            return 0.0
-
-        # 淡入阶段
-        if t < start_time:
-            fade_in_progress = (t - fade_in_start) / animation_duration
-            return max(0.0, min(1.0, fade_in_progress))
-
-        # 正常显示阶段
-        relative_time = t - start_time
-        if relative_time <= duration - animation_duration:
-            return 1.0
-
-        # 淡出阶段
-        fade_out_start = duration - animation_duration
-        if relative_time >= fade_out_start:
-            fade_out_progress = (relative_time - fade_out_start) / animation_duration
-            return max(0.0, 1.0 - fade_out_progress)
-
-        return 1.0
 
     def _calculate_lyric_duration(self, lyric_index: int, max_duration: float = float('inf')) -> float:
         """计算歌词持续时间
@@ -410,10 +467,13 @@ class LyricTimeline(LayoutElement):
 
         # 遍历所有活动歌词，按顺序渲染
         for lyric in active_lyrics:
-            animation_progress = lyric['animation_progress']
-
-            if animation_progress < 0.001:  # 过滤掉几乎不可见的歌词
+            animation_progress, animation = lyric['animation']
+            props = {'y_offset': 0, 'alpha': 1.0}
+            animation.effect(props, animation_progress)
+            alpha = props['alpha']
+            if alpha < 0.001:  # 过滤掉几乎不可见的歌词
                 continue
+            y_offset = props['y_offset']
 
             # 获取缓存的文字图片
             cache_key = self._get_cache_key(lyric['text'])
@@ -422,7 +482,7 @@ class LyricTimeline(LayoutElement):
                 self._create_text_image_opencv(lyric['text'], cache_key, context.video_size)
 
             # 使用OpenCV alpha blending渲染到帧缓冲区
-            self._render_cached_text_opencv(frame_buffer, cache_key, animation_progress, context)
+            self._render_cached_text_opencv(frame_buffer, cache_key, y_offset=y_offset,alpha=alpha, context=context)
 
     def _initialize_text_cache(self, video_size: Tuple[int, int]):
         """初始化文字图片缓存"""
@@ -497,7 +557,7 @@ class LyricTimeline(LayoutElement):
         self._text_cache[cache_key] = text_array
 
     def _render_cached_text_opencv(self, frame_buffer: np.ndarray, cache_key: str,
-                                  animation_progress: float, context: RenderContext):
+                                  y_offset: int, alpha: float, context: RenderContext):
         """使用OpenCV将缓存的文字图片渲染到帧缓冲区"""
         if cache_key not in self._text_cache or self._text_cache[cache_key] is None:
             return
@@ -505,30 +565,22 @@ class LyricTimeline(LayoutElement):
         text_img = self._text_cache[cache_key]
 
         # 计算渲染位置（传递动画进度用于位移计算）
-        render_pos = self._get_render_position(text_img.shape, context, animation_progress)
+        render_pos = self._get_render_position(text_img.shape, context)
         if render_pos is None:
             return
 
         x, y = render_pos
+        y = int(y+y_offset)
 
         # 使用OpenCV进行alpha blending
-        self._opencv_alpha_blend(frame_buffer, text_img, x, y, animation_progress)
+        self._opencv_alpha_blend(frame_buffer, text_img, x, y, alpha)
 
-    def _get_render_position(self, text_shape: Tuple[int, int, int], context: RenderContext, 
-                            animation_progress: float = 1.0) -> Optional[Tuple[int, int]]:
+    def _get_render_position(self, text_shape: Tuple[int, int, int], context: RenderContext) -> Optional[Tuple[int, int]]:
         """根据显示策略计算渲染位置，支持动画偏移"""
         text_height, text_width = text_shape[:2]
         video_width, video_height = context.video_size
         
-        # 计算纵向动画偏移（自下向上运动）
-        # 淡入时从下方ANIMATION_VERTICAL_OFFSET像素开始，淡出时向上方移动
-        if animation_progress < 1.0:
-            # 动画阶段：从下方向上移动
-            vertical_offset = int(ANIMATION_VERTICAL_OFFSET * (1.0 - animation_progress))
-        else:
-            # 完全显示阶段：无偏移
-            vertical_offset = 0
-
+        
         if self.display_mode == LyricDisplayMode.SIMPLE_FADE:
             # 简单模式：使用策略中的y_position
             if self._strategy and isinstance(self._strategy, SimpleFadeStrategy):
@@ -538,7 +590,7 @@ class LyricTimeline(LayoutElement):
             else:
                 y_pos = video_height // 2
             x_pos = (video_width - text_width) // 2
-            return (x_pos, y_pos - text_height // 2 + vertical_offset)
+            return (x_pos, y_pos - text_height // 2)
 
         elif self.display_mode == LyricDisplayMode.ENHANCED_PREVIEW:
             # 增强预览模式：使用策略中的current_y_offset
@@ -550,10 +602,10 @@ class LyricTimeline(LayoutElement):
                 current_y_offset = -50
             center_y = video_height // 2 + current_y_offset
             x_pos = (video_width - text_width) // 2
-            return (x_pos, center_y - text_height // 2 + vertical_offset)
+            return (x_pos, center_y - text_height // 2)
 
         # 默认居中
-        return ((video_width - text_width) // 2, (video_height - text_height) // 2 + vertical_offset)
+        return ((video_width - text_width) // 2, (video_height - text_height) // 2)
 
     def _opencv_alpha_blend(self, background: np.ndarray, foreground: np.ndarray,
                            x: int, y: int, alpha_factor: float):
