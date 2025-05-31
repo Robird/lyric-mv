@@ -11,6 +11,8 @@ LyricTimeline核心类型实现
 """
 
 import re
+import cv2
+import numpy as np
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Optional, Dict, Any
 from enum import Enum
@@ -19,6 +21,8 @@ from enum import Enum
 # 导入布局相关的数据类型
 from layout_types import LyricRect, LyricStyle
 from layout_engine import LayoutElement
+from lyric_content import RenderContext
+from font_cache import FontCache, detect_text_language
 
 # ============================================================================
 # 基础数据结构
@@ -183,6 +187,10 @@ class LyricTimeline(LayoutElement):
         self._processed_lyrics = self._preprocess_lyrics()
         self._max_lines = self._calculate_max_lines()
 
+        # 文字图片缓存系统（OpenCV优化）
+        self._text_cache = {}  # 缓存预渲染的文字图片
+        self._cache_initialized = False
+
         self._setup_strategy()
 
     def _preprocess_lyrics(self) -> List[Tuple[float, List[str]]]:
@@ -326,6 +334,7 @@ class LyricTimeline(LayoutElement):
         relative_time = t - start_time
 
         # 淡入动画
+        # TODO:AI 淡入动画过程中其实是看不清的，应该在时间上从start_time - animation_duration 开始淡入。这里需要配合get_content_at_time函数一同修改。考虑把get_animation_progress整合入get_content_at_time，直接让get_content_at_time返回多条歌词内容和各自的动画进度。
         if relative_time <= animation_duration:
             return relative_time / animation_duration
 
@@ -338,19 +347,186 @@ class LyricTimeline(LayoutElement):
         # 完全显示
         return 1.0
 
-    def render(self, frame_buffer: 'np.ndarray', context: 'RenderContext'):
+    def render(self, frame_buffer: np.ndarray, context: RenderContext):
         """渲染歌词到帧缓冲区（OpenCV优化版本）
 
         Args:
             frame_buffer: 目标帧缓冲区 (height, width, 3) - RGB格式
             context: 渲染上下文
         """
-        # 这个方法将在第二阶段实现OpenCV优化渲染
-        # 目前先保持与原有逻辑兼容，后续会添加：
-        # 1. 预计算和缓存文字图片
-        # 2. OpenCV alpha blending
-        # 3. 性能优化
-        pass
+        # 初始化缓存（如果需要）
+        if not self._cache_initialized:
+            self._initialize_text_cache(context.video_size)
+            self._cache_initialized = True
+
+        # TODO:AI 这里假定同一时间只有一条歌词活动，但考虑淡入淡出效果，前后两条歌词很可能同时存在。寻找适合的时机优化为多条歌词独立叠加显示，可能用一个循环就行，不必追求顺序无关的alpha blending，为了防止闪烁，可以按start_time用稳定排序算法排序一下。
+        # 获取当前时间的歌词内容
+        current_lyric = self.get_content_at_time(context.current_time)
+        if not current_lyric:
+            return
+
+        # 计算动画进度
+        animation_progress = self.get_animation_progress(
+            context.current_time,
+            current_lyric['start_time'],
+            current_lyric['duration']
+        )
+
+        if animation_progress <= 0:
+            return
+
+        # 获取缓存的文字图片
+        cache_key = self._get_cache_key(current_lyric['text'])
+        if cache_key not in self._text_cache:
+            # 如果缓存中没有，动态创建
+            self._create_text_image_opencv(current_lyric['text'], cache_key, context.video_size)
+
+        # 使用OpenCV alpha blending渲染到帧缓冲区
+        self._render_cached_text_opencv(frame_buffer, cache_key, animation_progress, context)
+
+    def _initialize_text_cache(self, video_size: Tuple[int, int]):
+        """初始化文字图片缓存"""
+        # 预计算所有歌词的文字图片
+        print(f"   初始化文字缓存，共 {len(self.lyrics_data)} 条歌词...")
+        for timestamp, text in self.lyrics_data:
+            cache_key = self._get_cache_key(text)
+            if cache_key not in self._text_cache:
+                self._create_text_image_opencv(text, cache_key, video_size)
+        print(f"   ✅ 文字缓存初始化完成，缓存 {len(self._text_cache)} 个文字图片")
+
+    def _get_cache_key(self, text: str) -> str:
+        """生成缓存键"""
+        # 使用文本内容和样式信息生成唯一键
+        style_key = f"{self.style.font_size}_{self.style.font_color}_{self.style.highlight_color}"
+        return f"{hash(text)}_{hash(style_key)}"
+
+    def _create_text_image_opencv(self, text: str, cache_key: str, video_size: Tuple[int, int]):
+        """使用OpenCV创建文字图片并缓存"""
+        # 检测文本语言
+        language = detect_text_language(text)
+
+        # 获取字体
+        font = FontCache.get_font(
+            font_path=None,  # 使用默认字体
+            size=self.style.font_size,
+            language=language
+        )
+
+        # 使用PIL创建文字图片（后续可以优化为纯OpenCV）
+        from PIL import Image, ImageDraw
+
+        # 计算文字尺寸
+        lines = text.split('\n')
+        line_height = int(self.style.font_size * 1.2)
+        max_width = 0
+        total_height = len(lines) * line_height
+
+        for line in lines:
+            if line.strip():
+                bbox = font.getbbox(line)
+                line_width = bbox[2] - bbox[0]
+                max_width = max(max_width, line_width)
+
+        if max_width <= 0 or total_height <= 0:
+            self._text_cache[cache_key] = None
+            return
+
+        # 创建RGBA图像
+        img = Image.new('RGBA', (int(max_width), int(total_height)), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+
+        # 绘制文字
+        y_offset = 0
+        for line in lines:
+            if line.strip():
+                # 计算居中位置
+                bbox = font.getbbox(line)
+                line_width = bbox[2] - bbox[0]
+                x_pos = (max_width - line_width) // 2
+
+                # 绘制阴影
+                draw.text((x_pos + 2, y_offset + 2), line, fill=(0, 0, 0, 200), font=font)
+
+                # 绘制主文字（白色，alpha将在渲染时动态调整）
+                draw.text((x_pos, y_offset), line, fill=(255, 255, 255, 255), font=font)
+
+            y_offset += line_height
+
+        # 转换为numpy数组并缓存
+        text_array = np.array(img)
+        self._text_cache[cache_key] = text_array
+
+    def _render_cached_text_opencv(self, frame_buffer: np.ndarray, cache_key: str,
+                                  animation_progress: float, context: RenderContext):
+        """使用OpenCV将缓存的文字图片渲染到帧缓冲区"""
+        if cache_key not in self._text_cache or self._text_cache[cache_key] is None:
+            return
+
+        text_img = self._text_cache[cache_key]
+
+        # 计算渲染位置（需要根据策略获取）
+        render_pos = self._get_render_position(text_img.shape, context)
+        if render_pos is None:
+            return
+
+        x, y = render_pos
+
+        # 使用OpenCV进行alpha blending
+        self._opencv_alpha_blend(frame_buffer, text_img, x, y, animation_progress)
+
+    def _get_render_position(self, text_shape: Tuple[int, int, int], context: RenderContext) -> Optional[Tuple[int, int]]:
+        """根据显示策略计算渲染位置"""
+        text_height, text_width = text_shape[:2]
+        video_width, video_height = context.video_size
+
+        if self.display_mode == LyricDisplayMode.SIMPLE_FADE:
+            # 简单模式：使用策略中的y_position
+            y_pos = getattr(self._strategy, 'y_position', video_height // 2)
+            x_pos = (video_width - text_width) // 2
+            return (x_pos, y_pos - text_height // 2)
+
+        elif self.display_mode == LyricDisplayMode.ENHANCED_PREVIEW:
+            # 增强预览模式：使用策略中的current_y_offset
+            current_y_offset = getattr(self._strategy, 'current_y_offset', -50)
+            center_y = video_height // 2 + current_y_offset
+            x_pos = (video_width - text_width) // 2
+            return (x_pos, center_y - text_height // 2)
+
+        # 默认居中
+        return ((video_width - text_width) // 2, (video_height - text_height) // 2)
+
+    def _opencv_alpha_blend(self, background: np.ndarray, foreground: np.ndarray,
+                           x: int, y: int, alpha_factor: float):
+        """使用OpenCV进行alpha混合"""
+        if foreground.shape[2] != 4:  # 确保前景有alpha通道
+            return
+
+        fg_height, fg_width = foreground.shape[:2]
+
+        # 确保不超出边界
+        x = max(0, min(x, background.shape[1] - fg_width))
+        y = max(0, min(y, background.shape[0] - fg_height))
+
+        end_y = min(y + fg_height, background.shape[0])
+        end_x = min(x + fg_width, background.shape[1])
+        actual_height = end_y - y
+        actual_width = end_x - x
+
+        if actual_height <= 0 or actual_width <= 0:
+            return
+
+        # 获取区域
+        bg_region = background[y:end_y, x:end_x]
+        fg_region = foreground[:actual_height, :actual_width]
+
+        # 提取alpha通道并应用动画进度
+        alpha = fg_region[:, :, 3:4].astype(np.float32) / 255.0 * alpha_factor
+
+        # 执行alpha混合
+        bg_region[:, :, :3] = (
+            bg_region[:, :, :3].astype(np.float32) * (1 - alpha) +
+            fg_region[:, :, :3].astype(np.float32) * alpha
+        ).astype(np.uint8)
 
     def get_processed_lyrics(self, max_duration: float = float('inf')) -> List[Tuple[float, List[str]]]:
         """获取预处理后的歌词数据，供策略类使用

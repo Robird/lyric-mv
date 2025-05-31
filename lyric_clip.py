@@ -16,7 +16,7 @@ from layout_engine import LayoutEngine
 from lyric_content import LyricContent, LyricContentFactory, RenderContext
 from font_cache import FontCache, detect_text_language
 
-# TODO:AI 重构LyricClip。预计算和缓存文字图片。在此基础上，使用帧缓冲区和opencv的alpha blending来实现歌词的渲染和合成。
+# 预计算和缓存文字图片。在此基础上，使用帧缓冲区和opencv的alpha blending来实现歌词的渲染和合成。
 class LyricClip(VideoClip):
     """歌词视频片段容器
 
@@ -96,6 +96,7 @@ class LyricClip(VideoClip):
         # 需要缩放和居中对齐
         print(f"   背景图片尺寸调整: {bg_width}x{bg_height} -> {target_width}x{target_height}")
 
+        # TODO:AI 优化这部分的缩放逻辑，使用OpenCV的cv2.resize()函数，指定INTER_LANCZOS4插值方式。
         # 使用PIL进行高质量缩放
         from PIL import Image
         bg_image = Image.fromarray(background)
@@ -155,15 +156,12 @@ class LyricClip(VideoClip):
 
         # 遍历所有时间轴，渲染当前时间的歌词
         for timeline in self.timelines:
-            # 使用timeline的render方法（第二阶段将实现OpenCV优化）
-            if hasattr(timeline, 'render') and callable(getattr(timeline, 'render')):
-                timeline.render(self.frame_buffer, context)
-            else:
-                # 回退到原有渲染方式
-                self._render_timeline_at_time(self.frame_buffer, timeline, t, context)
+            timeline.render(self.frame_buffer, context)
+            # self._render_timeline_at_time(self.frame_buffer, timeline, t, context)
 
         return self.frame_buffer_view
 
+    # TODO:AI 此函数已被timeline.render替代，可以剥洋葱一样的逐步删除无任何引用的相关实现。
     def _render_timeline_at_time(self, frame: np.ndarray,
                                timeline: LyricTimeline,
                                t: float,
