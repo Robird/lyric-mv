@@ -575,7 +575,7 @@ def demo_draft_mode(config_path: Path, t_max_sec: float = 20):
 
 if __name__ == "__main__":
     # 默认使用草稿模式进行快速测试
-    demo_draft_mode(Path(r"精武英雄\lrc-mv.yaml"))
+    # demo_draft_mode(Path(r"精武英雄\lrc-mv.yaml"))
 
     # 如需产品质量，取消注释下面这行
-    # demo_enhanced_features(Path(r"精武英雄\lrc-mv.yaml"), out_suffix=".full")
+    demo_enhanced_features(Path(r"精武英雄\lrc-mv.yaml"), out_suffix=".full")

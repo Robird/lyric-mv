@@ -269,34 +269,98 @@ class LyricTimeline(LayoutElement):
         """获取最大行数（公共只读属性）"""
         return self._max_lines
 
-    def get_content_at_time(self, t: float):
-        """获取指定时间点的歌词内容
+    def get_content_at_time(self, t: float, max_duration: float = float('inf'),
+                           animation_duration: float = 0.3) -> List[Dict[str, Any]]:
+        """获取指定时间的歌词内容（支持多条歌词同时显示）
+
+        重构后的版本：
+        - 支持淡入淡出时前后歌词同时存在
+        - 提前开始淡入动画（从start_time - animation_duration开始）
+        - 直接返回包含动画进度的歌词列表
 
         Args:
             t: 时间点（秒）
+            max_duration: 视频最大时长
+            animation_duration: 动画持续时间
 
         Returns:
-            歌词内容或None
+            歌词内容列表，每个元素包含text, start_time, duration, animation_progress等信息
         """
-        # 查找当前时间的歌词
+        active_lyrics = []
+
         for i, (start_time, text) in enumerate(self.lyrics_data):
-            duration = self._calculate_lyric_duration(i)
+            duration = self._calculate_lyric_duration(i, max_duration)
 
-            if start_time <= t < start_time + duration:
-                return {
-                    'text': text,
-                    'start_time': start_time,
-                    'duration': duration,
-                    'index': i
-                }
+            # 计算有效显示时间范围（包括提前淡入）
+            fade_in_start = start_time - animation_duration
+            fade_out_end = start_time + duration
 
-        return None
+            # 检查当前时间是否在显示范围内
+            if fade_in_start <= t < fade_out_end:
+                # 计算动画进度
+                animation_progress = self._calculate_animation_progress(
+                    t, start_time, duration, animation_duration
+                )
 
-    def _calculate_lyric_duration(self, lyric_index: int) -> float:
+                if animation_progress >= 0:  # 包含动画进度为0的歌词（淡入开始瞬间）
+                    active_lyrics.append({
+                        'text': text,
+                        'start_time': start_time,
+                        'duration': duration,
+                        'animation_progress': animation_progress,
+                        'index': i,
+                        'language': self.language,
+                        'style': self.style
+                    })
+
+        # 按开始时间排序，确保稳定的渲染顺序
+        active_lyrics.sort(key=lambda x: x['start_time'])
+        return active_lyrics
+
+    def _calculate_animation_progress(self, t: float, start_time: float,
+                                    duration: float, animation_duration: float = 0.3) -> float:
+        """计算动画进度（重构版本，支持提前淡入）
+
+        Args:
+            t: 当前时间
+            start_time: 歌词开始时间
+            duration: 歌词持续时间
+            animation_duration: 动画持续时间
+
+        Returns:
+            动画进度 (0.0-1.0)
+        """
+        # 提前淡入：从start_time - animation_duration开始
+        fade_in_start = start_time - animation_duration
+        fade_out_end = start_time + duration
+
+        if t < fade_in_start or t >= fade_out_end:
+            return 0.0
+
+        # 淡入阶段
+        if t < start_time:
+            fade_in_progress = (t - fade_in_start) / animation_duration
+            return max(0.0, min(1.0, fade_in_progress))
+
+        # 正常显示阶段
+        relative_time = t - start_time
+        if relative_time <= duration - animation_duration:
+            return 1.0
+
+        # 淡出阶段
+        fade_out_start = duration - animation_duration
+        if relative_time >= fade_out_start:
+            fade_out_progress = (relative_time - fade_out_start) / animation_duration
+            return max(0.0, 1.0 - fade_out_progress)
+
+        return 1.0
+
+    def _calculate_lyric_duration(self, lyric_index: int, max_duration: float = float('inf')) -> float:
         """计算歌词持续时间
 
         Args:
             lyric_index: 歌词索引
+            max_duration: 视频最大时长，用于限制最后一句歌词的持续时间
 
         Returns:
             持续时间（秒）
@@ -311,44 +375,14 @@ class LyricTimeline(LayoutElement):
             next_time = self.lyrics_data[lyric_index + 1][0]
             return next_time - current_time
 
-        # 最后一句歌词
-        # TODO:AI 考虑返回float('inf'),让最有一句歌词持续到视频结束
-        return 10.0
-
-    def get_animation_progress(self, t: float, start_time: float,
-                             duration: float, animation_duration: float = 0.3) -> float:
-        """计算动画进度
-
-        Args:
-            t: 当前时间
-            start_time: 歌词开始时间
-            duration: 歌词持续时间
-            animation_duration: 动画持续时间
-
-        Returns:
-            动画进度 (0.0-1.0)
-        """
-        if t < start_time or t >= start_time + duration:
-            return 0.0
-
-        relative_time = t - start_time
-
-        # 淡入动画
-        # TODO:AI 淡入动画过程中其实是看不清的，应该在时间上从start_time - animation_duration 开始淡入。这里需要配合get_content_at_time函数一同修改。考虑把get_animation_progress整合入get_content_at_time，直接让get_content_at_time返回多条歌词内容和各自的动画进度。
-        if relative_time <= animation_duration:
-            return relative_time / animation_duration
-
-        # 淡出动画
-        fade_out_start = duration - animation_duration
-        if relative_time >= fade_out_start:
-            fade_out_progress = (relative_time - fade_out_start) / animation_duration
-            return 1.0 - fade_out_progress
-
-        # 完全显示
-        return 1.0
+        # 最后一句歌词：持续到视频结束
+        if max_duration != float('inf'):
+            return max(3.0, max_duration - current_time)  # 至少3秒，最多到视频结束
+        else:
+            return float('inf')  # 持续到视频结束
 
     def render(self, frame_buffer: np.ndarray, context: RenderContext):
-        """渲染歌词到帧缓冲区（OpenCV优化版本）
+        """渲染歌词到帧缓冲区（OpenCV优化版本，支持多条歌词同时显示）
 
         Args:
             frame_buffer: 目标帧缓冲区 (height, width, 3) - RGB格式
@@ -359,30 +393,26 @@ class LyricTimeline(LayoutElement):
             self._initialize_text_cache(context.video_size)
             self._cache_initialized = True
 
-        # TODO:AI 这里假定同一时间只有一条歌词活动，但考虑淡入淡出效果，前后两条歌词很可能同时存在。寻找适合的时机优化为多条歌词独立叠加显示，可能用一个循环就行，不必追求顺序无关的alpha blending，为了防止闪烁，可以按start_time用稳定排序算法排序一下。
-        # 获取当前时间的歌词内容
-        current_lyric = self.get_content_at_time(context.current_time)
-        if not current_lyric:
+        # 获取当前时间的所有活动歌词（支持多条歌词同时显示）
+        active_lyrics = self.get_content_at_time(context.current_time)
+        if not active_lyrics:
             return
 
-        # 计算动画进度
-        animation_progress = self.get_animation_progress(
-            context.current_time,
-            current_lyric['start_time'],
-            current_lyric['duration']
-        )
+        # 遍历所有活动歌词，按顺序渲染
+        for lyric in active_lyrics:
+            animation_progress = lyric['animation_progress']
 
-        if animation_progress <= 0:
-            return
+            if animation_progress < 0.001:  # 过滤掉几乎不可见的歌词
+                continue
 
-        # 获取缓存的文字图片
-        cache_key = self._get_cache_key(current_lyric['text'])
-        if cache_key not in self._text_cache:
-            # 如果缓存中没有，动态创建
-            self._create_text_image_opencv(current_lyric['text'], cache_key, context.video_size)
+            # 获取缓存的文字图片
+            cache_key = self._get_cache_key(lyric['text'])
+            if cache_key not in self._text_cache:
+                # 如果缓存中没有，动态创建
+                self._create_text_image_opencv(lyric['text'], cache_key, context.video_size)
 
-        # 使用OpenCV alpha blending渲染到帧缓冲区
-        self._render_cached_text_opencv(frame_buffer, cache_key, animation_progress, context)
+            # 使用OpenCV alpha blending渲染到帧缓冲区
+            self._render_cached_text_opencv(frame_buffer, cache_key, animation_progress, context)
 
     def _initialize_text_cache(self, video_size: Tuple[int, int]):
         """初始化文字图片缓存"""
@@ -481,13 +511,23 @@ class LyricTimeline(LayoutElement):
 
         if self.display_mode == LyricDisplayMode.SIMPLE_FADE:
             # 简单模式：使用策略中的y_position
-            y_pos = getattr(self._strategy, 'y_position', video_height // 2)
+            if self._strategy and hasattr(self._strategy, 'y_position'):
+                y_pos = self._strategy.y_position
+                if y_pos is None:
+                    y_pos = video_height // 2
+            else:
+                y_pos = video_height // 2
             x_pos = (video_width - text_width) // 2
             return (x_pos, y_pos - text_height // 2)
 
         elif self.display_mode == LyricDisplayMode.ENHANCED_PREVIEW:
             # 增强预览模式：使用策略中的current_y_offset
-            current_y_offset = getattr(self._strategy, 'current_y_offset', -50)
+            if self._strategy and hasattr(self._strategy, 'current_y_offset'):
+                current_y_offset = self._strategy.current_y_offset
+                if current_y_offset is None:
+                    current_y_offset = -50
+            else:
+                current_y_offset = -50
             center_y = video_height // 2 + current_y_offset
             x_pos = (video_width - text_width) // 2
             return (x_pos, center_y - text_height // 2)

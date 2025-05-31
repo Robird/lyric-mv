@@ -30,8 +30,7 @@ class LyricClipRenderer:
 
     def render_from_config(self, config_path: Path,
                           t_max_sec: float = float('inf'),
-                          draft_mode: bool = False,
-                          use_lyric_clip: bool = True) -> bool:
+                          draft_mode: bool = False) -> bool:
         """从配置文件渲染视频
 
         Args:
@@ -45,7 +44,6 @@ class LyricClipRenderer:
         """
         print("🎬 LyricClip渲染器")
         print("=" * 60)
-        print(f"渲染模式: {'LyricClip (新)' if use_lyric_clip else '传统ImageClip'}")
         print(f"质量模式: {'草稿' if draft_mode else '产品'}")
         print(f"时长限制: {t_max_sec if t_max_sec != float('inf') else '无限制'}")
         print()
@@ -80,16 +78,11 @@ class LyricClipRenderer:
             print(f"音频时长: {audio_duration:.2f}秒")
 
             # 选择渲染方式
-            if use_lyric_clip:
-                success = self._render_with_lyric_clip(
-                    timelines, audio_path, background_path, output_path,
-                    audio_duration, draft_mode
-                )
-            else:
-                success = self._render_with_traditional_method(
-                    timelines, audio_path, background_path, output_path,
-                    audio_duration, draft_mode
-                )
+            
+            success = self._render(
+                timelines, audio_path, background_path, output_path,
+                audio_duration, draft_mode
+            )
 
             if success:
                 self._print_success_info(output_path)
@@ -163,51 +156,7 @@ class LyricClipRenderer:
 
         return timelines
 
-    def _render_with_lyric_clip(self, timelines, audio_path, background_path,
-                               output_path, duration, draft_mode):
-        """使用LyricClip渲染（新方法）"""
-        print("\n🚀 使用LyricClip渲染（新实现）...")
-
-        start_time = time.perf_counter()
-
-        try:
-            # 创建LyricClip
-            print("创建LyricClip...")
-            lyric_clip = self.generator.create_lyric_clip(timelines, duration)
-            print(f"✅ LyricClip创建成功: {len(timelines)} 个时间轴")
-
-            # 创建背景
-            print("创建背景...")
-            background_clip = self.generator._create_video_background(
-                duration, str(background_path)
-            )
-
-            # 加载音频
-            print("加载音频...")
-            from moviepy import AudioFileClip
-            audio_clip = AudioFileClip(str(audio_path))
-            if duration < audio_clip.duration:
-                audio_clip = audio_clip.subclipped(0, duration)
-
-            # 使用LyricClip渲染
-            print("开始渲染...")
-            self.generator._generate_video_with_lyric_clip(
-                lyric_clip, background_clip, audio_clip,
-                str(output_path), draft_mode
-            )
-
-            render_time = time.perf_counter() - start_time
-            print(f"✅ LyricClip渲染完成，耗时: {render_time:.2f}秒")
-
-            return True
-
-        except Exception as e:
-            render_time = time.perf_counter() - start_time
-            print(f"❌ LyricClip渲染失败: {e}")
-            print(f"失败前耗时: {render_time:.2f}秒")
-            return False
-
-    def _render_with_traditional_method(self, timelines, audio_path, background_path,
+    def _render(self, timelines, audio_path, background_path,
                                       output_path, duration, draft_mode):
         """使用传统方法渲染（对比用）"""
         print("\n🐌 使用传统方法渲染（对比）...")
@@ -266,7 +215,6 @@ def main():
   python main.py                                    # 使用默认配置渲染
   python main.py --config custom.yaml              # 使用自定义配置
   python main.py --draft --duration 30             # 草稿模式，30秒
-  python main.py --traditional                     # 使用传统方法对比
   python main.py --config 精武英雄/lrc-mv.yaml --draft  # 快速测试
         """
     )
@@ -292,12 +240,6 @@ def main():
     )
 
     parser.add_argument(
-        "--traditional",
-        action="store_true",
-        help="使用传统ImageClip方法（性能对比用）"
-    )
-
-    parser.add_argument(
         "--width",
         type=int,
         default=720,
@@ -314,8 +256,8 @@ def main():
     parser.add_argument(
         "--fps",
         type=int,
-        default=30,
-        help="帧率 (默认: 30)"
+        default=24,
+        help="帧率 (默认: 24)"
     )
 
     args = parser.parse_args()
@@ -333,8 +275,7 @@ def main():
     success = renderer.render_from_config(
         config_path=args.config,
         t_max_sec=args.duration,
-        draft_mode=args.draft,
-        use_lyric_clip=not args.traditional
+        draft_mode=args.draft
     )
 
     return 0 if success else 1
