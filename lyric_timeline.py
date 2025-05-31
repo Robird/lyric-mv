@@ -11,7 +11,6 @@ LyricTimeline核心类型实现
 """
 
 import re
-import cv2
 import numpy as np
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Optional, Dict, Any
@@ -25,8 +24,12 @@ from lyric_content import RenderContext
 from font_cache import FontCache, detect_text_language
 
 # ============================================================================
-# 基础数据结构
+# 基础数据结构和常量
 # ============================================================================
+
+# 动画配置常量
+ANIMATION_VERTICAL_OFFSET = 30  # 纵向动画偏移量（像素）
+ANIMATION_LAYOUT_PADDING = ANIMATION_VERTICAL_OFFSET   # 布局时预留的动画空间（像素）
 
 class LyricDisplayMode(Enum):
     """歌词显示模式枚举"""
@@ -90,11 +93,14 @@ class SimpleFadeStrategy(LyricDisplayStrategy):
         line_height = int(font_size * 1.2)
         total_height = max_lines * line_height
 
+        # 为动画预留额外空间（上下各预留ANIMATION_LAYOUT_PADDING像素）
+        total_height_with_animation = total_height + 2 * ANIMATION_LAYOUT_PADDING
+
         return LyricRect(
             x=0,
-            y=y_pos - total_height // 2,
+            y=y_pos - total_height_with_animation // 2,
             width=video_width,
-            height=total_height
+            height=total_height_with_animation
         )
 
     # generate_clips方法已移除
@@ -128,13 +134,17 @@ class EnhancedPreviewStrategy(LyricDisplayStrategy):
 
         # 需要容纳当前歌词和预览歌词，考虑偏移量
         total_height = abs(self.current_y_offset) + abs(self.preview_y_offset) + single_lyric_height * 2
+        
+        # 为动画预留额外空间（上下各预留ANIMATION_LAYOUT_PADDING像素）
+        total_height_with_animation = total_height + 2 * ANIMATION_LAYOUT_PADDING
+        
         center_y = video_height // 2
 
         return LyricRect(
             x=0,
-            y=center_y - total_height // 2,
+            y=center_y - total_height_with_animation // 2,
             width=video_width,
-            height=total_height
+            height=total_height_with_animation
         )
 
     # generate_clips方法已移除
@@ -494,8 +504,8 @@ class LyricTimeline(LayoutElement):
 
         text_img = self._text_cache[cache_key]
 
-        # 计算渲染位置（需要根据策略获取）
-        render_pos = self._get_render_position(text_img.shape, context)
+        # 计算渲染位置（传递动画进度用于位移计算）
+        render_pos = self._get_render_position(text_img.shape, context, animation_progress)
         if render_pos is None:
             return
 
@@ -504,25 +514,35 @@ class LyricTimeline(LayoutElement):
         # 使用OpenCV进行alpha blending
         self._opencv_alpha_blend(frame_buffer, text_img, x, y, animation_progress)
 
-    def _get_render_position(self, text_shape: Tuple[int, int, int], context: RenderContext) -> Optional[Tuple[int, int]]:
-        """根据显示策略计算渲染位置"""
+    def _get_render_position(self, text_shape: Tuple[int, int, int], context: RenderContext, 
+                            animation_progress: float = 1.0) -> Optional[Tuple[int, int]]:
+        """根据显示策略计算渲染位置，支持动画偏移"""
         text_height, text_width = text_shape[:2]
         video_width, video_height = context.video_size
+        
+        # 计算纵向动画偏移（自下向上运动）
+        # 淡入时从下方ANIMATION_VERTICAL_OFFSET像素开始，淡出时向上方移动
+        if animation_progress < 1.0:
+            # 动画阶段：从下方向上移动
+            vertical_offset = int(ANIMATION_VERTICAL_OFFSET * (1.0 - animation_progress))
+        else:
+            # 完全显示阶段：无偏移
+            vertical_offset = 0
 
         if self.display_mode == LyricDisplayMode.SIMPLE_FADE:
             # 简单模式：使用策略中的y_position
-            if self._strategy and hasattr(self._strategy, 'y_position'):
+            if self._strategy and isinstance(self._strategy, SimpleFadeStrategy):
                 y_pos = self._strategy.y_position
                 if y_pos is None:
                     y_pos = video_height // 2
             else:
                 y_pos = video_height // 2
             x_pos = (video_width - text_width) // 2
-            return (x_pos, y_pos - text_height // 2)
+            return (x_pos, y_pos - text_height // 2 + vertical_offset)
 
         elif self.display_mode == LyricDisplayMode.ENHANCED_PREVIEW:
             # 增强预览模式：使用策略中的current_y_offset
-            if self._strategy and hasattr(self._strategy, 'current_y_offset'):
+            if self._strategy and isinstance(self._strategy, EnhancedPreviewStrategy):
                 current_y_offset = self._strategy.current_y_offset
                 if current_y_offset is None:
                     current_y_offset = -50
@@ -530,10 +550,10 @@ class LyricTimeline(LayoutElement):
                 current_y_offset = -50
             center_y = video_height // 2 + current_y_offset
             x_pos = (video_width - text_width) // 2
-            return (x_pos, center_y - text_height // 2)
+            return (x_pos, center_y - text_height // 2 + vertical_offset)
 
         # 默认居中
-        return ((video_width - text_width) // 2, (video_height - text_height) // 2)
+        return ((video_width - text_width) // 2, (video_height - text_height) // 2 + vertical_offset)
 
     def _opencv_alpha_blend(self, background: np.ndarray, foreground: np.ndarray,
                            x: int, y: int, alpha_factor: float):
@@ -676,141 +696,3 @@ class LyricTimeline(LayoutElement):
             lyrics.append((timestamp, combined_text))
 
         return sorted(lyrics, key=lambda x: x[0])
-
-# ============================================================================
-# 便捷函数和工厂方法
-# ============================================================================
-
-def create_enhanced_timeline(lyrics_data: List[Tuple[float, str]],
-                           language: str = "chinese",
-                           element_id: Optional[str] = None,
-                           priority: int = 5) -> LyricTimeline:
-    """创建增强预览模式的时间轴（便捷函数）"""
-    style = LyricStyle(
-        font_size=80,
-        highlight_color='#FFD700',
-        glow_enabled=True,
-        animation_style='fade'
-    )
-    return LyricTimeline(
-        lyrics_data=lyrics_data,
-        language=language,
-        style=style,
-        display_mode=LyricDisplayMode.ENHANCED_PREVIEW,
-        element_id=element_id or f"enhanced_{language}",
-        priority=priority,
-        is_flexible=True
-    )
-
-def create_simple_timeline(lyrics_data: List[Tuple[float, str]],
-                         language: str = "english",
-                         is_highlighted: bool = False,
-                         element_id: Optional[str] = None,
-                         priority: int = 10) -> LyricTimeline:
-    """创建简单淡入淡出模式的时间轴（便捷函数）"""
-    timeline = LyricTimeline(
-        lyrics_data=lyrics_data,
-        language=language,
-        display_mode=LyricDisplayMode.SIMPLE_FADE,
-        element_id=element_id or f"simple_{language}",
-        priority=priority,
-        is_flexible=True
-    )
-    timeline.set_display_mode(
-        LyricDisplayMode.SIMPLE_FADE,
-        is_highlighted=is_highlighted
-    )
-    return timeline
-
-def create_bilingual_timelines(main_lyrics: List[Tuple[float, str]],
-                             aux_lyrics: List[Tuple[float, str]],
-                             main_language: str = "chinese",
-                             aux_language: str = "english",
-                             video_height: int = 720) -> Tuple[LyricTimeline, LyricTimeline]:
-    """创建双语时间轴对（便捷函数）
-
-    重构后的版本：
-    - main_timeline使用ENHANCED_PREVIEW模式，优先级更高
-    - aux_timeline使用SIMPLE_FADE模式，优先级较低，并设置合适的y位置避免重叠
-    """
-    # 主时间轴使用增强预览模式，优先级高
-    main_timeline = LyricTimeline(
-        lyrics_data=main_lyrics,
-        language=main_language,
-        style=LyricStyle(font_size=80, highlight_color='#FFD700'),
-        display_mode=LyricDisplayMode.ENHANCED_PREVIEW,
-        element_id=f"main_{main_language}",
-        priority=1,  # 高优先级
-        is_flexible=False  # 主歌词位置固定
-    )
-
-    # 副时间轴使用简单模式，显示在下方，优先级低
-    aux_timeline = LyricTimeline(
-        lyrics_data=aux_lyrics,
-        language=aux_language,
-        style=LyricStyle(font_size=60, font_color='white'),
-        display_mode=LyricDisplayMode.SIMPLE_FADE,
-        element_id=f"aux_{aux_language}",
-        priority=10,  # 低优先级
-        is_flexible=True  # 副歌词位置可调整
-    )
-    # 设置副歌词显示在下方，避免与主歌词重叠
-    aux_timeline.set_display_mode(
-        LyricDisplayMode.SIMPLE_FADE,
-        y_position=video_height // 2 + 100,  # 显示在中心下方
-        is_highlighted=False
-    )
-
-    return main_timeline, aux_timeline
-
-# ============================================================================
-# 使用示例
-# ============================================================================
-
-if __name__ == "__main__":
-    # 示例数据
-    test_lyrics = [
-        (0.0, "第一句歌词"),
-        (3.0, "第二句歌词"),
-        (6.0, "第三句歌词"),
-        (9.0, "第四句歌词")
-    ]
-
-    print("🎵 LyricTimeline OOP重构演示")
-    print("=" * 50)
-
-    # 创建增强预览模式时间轴
-    enhanced_timeline = create_enhanced_timeline(test_lyrics, "chinese")
-    print("✅ 增强预览模式时间轴创建成功")
-    print(f"📊 时间轴信息: {enhanced_timeline.get_info()}")
-
-    # 创建简单模式时间轴
-    simple_timeline = create_simple_timeline(test_lyrics, "english")
-    print("\n✅ 简单模式时间轴创建成功")
-    print(f"📊 时间轴信息: {simple_timeline.get_info()}")
-
-    # 计算所需区域
-    video_width, video_height = 1280, 720
-    enhanced_rect = enhanced_timeline.calculate_required_rect(video_width, video_height)
-    simple_rect = simple_timeline.calculate_required_rect(video_width, video_height)
-
-    print(f"\n📐 增强模式所需区域: {enhanced_rect}")
-    print(f"📐 简单模式所需区域: {simple_rect}")
-
-    # 检查区域重叠
-    if enhanced_rect.overlaps_with(simple_rect):
-        print("⚠️  警告: 两个时间轴的显示区域重叠!")
-    else:
-        print("✅ 两个时间轴的显示区域不重叠，可以同时使用")
-
-    # 动态切换显示模式示例
-    print("\n🔄 动态切换显示模式演示:")
-    enhanced_timeline.set_display_mode(
-        LyricDisplayMode.ENHANCED_PREVIEW,
-        current_y_offset=-60,
-        preview_y_offset=100
-    )
-    print("✅ 已切换增强模式参数")
-
-    print("\n🎉 LyricTimeline OOP重构演示完成！")
-    print("💡 现在可以在enhanced_generator.py中集成这些类了")

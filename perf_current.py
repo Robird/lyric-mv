@@ -19,11 +19,11 @@ def profile_current_version():
     profiler.enable()
     
     try:
-        from enhanced_generator import demo_enhanced_features
+        from enhanced_generator import render_mv_by_config
         config_path = Path("精武英雄/lrc-mv.yaml")
         
         # 运行视频生成
-        success = demo_enhanced_features(
+        success = render_mv_by_config(
             config_path=config_path,
             t_max_sec=60.0,
             out_suffix=".perf"

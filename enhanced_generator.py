@@ -426,7 +426,7 @@ class EnhancedJingwuGenerator:
             traceback.print_exc()
             return False
 
-def demo_enhanced_features(config_path: Path, t_max_sec: float = float('inf'), draft_mode: bool = False,
+def render_mv_by_config(config_path: Path, t_max_sec: float = float('inf'), draft_mode: bool = False,
                            out_suffix=""):
     """使用配置文件生成歌词视频 (纯OOP版)
 
@@ -563,18 +563,18 @@ def demo_enhanced_features(config_path: Path, t_max_sec: float = float('inf'), d
 
     return success
 
-def demo_draft_mode(config_path: Path, t_max_sec: float = 20):
+def draft_mv_by_config(config_path: Path, t_max_sec: float = 20):
     """草稿模式演示 - 快速生成用于开发测试"""
     print("🚀 草稿模式演示 - 快速编码")
     print("=" * 50)
     print("注意: 草稿模式使用快速编码设置，质量较低但速度更快，适合开发测试使用")
     print()
 
-    return demo_enhanced_features(config_path, t_max_sec, draft_mode=True, out_suffix=".draft")
+    return render_mv_by_config(config_path, t_max_sec, draft_mode=True, out_suffix=".draft")
 
 if __name__ == "__main__":
     # 默认使用草稿模式进行快速测试
     # demo_draft_mode(Path(r"精武英雄\lrc-mv.yaml"))
 
     # 如需产品质量，取消注释下面这行
-    demo_enhanced_features(Path(r"精武英雄\lrc-mv.yaml"), out_suffix=".full")
+    render_mv_by_config(Path(r"精武英雄\lrc-mv.yaml"), out_suffix=".full")
