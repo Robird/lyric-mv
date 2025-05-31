@@ -16,6 +16,7 @@ from lrc_mv_config import load_lrc_mv_config
 # 导入LyricTimeline相关类
 from lyric_timeline import LyricTimeline, LyricDisplayMode
 from layout_engine import LayoutEngine, VerticalStackStrategy
+from lyric_clip import LyricClip, create_lyric_clip
 
 DEFAULT_WIDTH = 720
 DEFAULT_HEIGHT = 1280
@@ -191,6 +192,59 @@ class EnhancedJingwuGenerator:
         #         clip = clip.resize(lambda t: 0.8 + 0.2 * min(t / 0.3, 1))
 
         return clip
+
+    def create_lyric_clip(self, timelines: List[LyricTimeline],
+                         duration: float) -> LyricClip:
+        """创建LyricClip（新方式）
+
+        Args:
+            timelines: 歌词时间轴列表
+            duration: 视频时长
+
+        Returns:
+            LyricClip实例
+        """
+        # 创建布局引擎
+        layout_engine = LayoutEngine(VerticalStackStrategy(spacing=30))
+
+        # 添加所有时间轴
+        for timeline in timelines:
+            layout_engine.add_element(timeline)
+
+        # 创建LyricClip
+        return create_lyric_clip(
+            timelines=timelines,
+            layout_engine=layout_engine,
+            size=(self.width, self.height),
+            duration=duration,
+            fps=self.fps
+        )
+
+    def _generate_video_with_lyric_clip(self, lyric_clip: LyricClip,
+                                       background_clip, audio_clip,
+                                       output_path: str, draft_mode: bool = False):
+        """使用LyricClip的视频生成方法
+
+        Args:
+            lyric_clip: LyricClip实例
+            background_clip: 背景片段
+            audio_clip: 音频片段
+            output_path: 输出路径
+            draft_mode: 草稿模式
+        """
+        print("使用LyricClip合成视频...")
+
+        # 合成视频（背景 + LyricClip）
+        all_clips = [background_clip, lyric_clip]
+
+        # 使用现有的合成和导出逻辑
+        self._finalize_and_export_video(
+            all_clips=all_clips,
+            audio_clip=audio_clip,
+            output_path=output_path,
+            temp_audio_file_suffix="lyric_clip",
+            draft_mode=draft_mode
+        )
 
     def _apply_layout_to_timeline(self, timeline: 'LyricTimeline', target_rect):
         """将布局结果应用到时间轴
@@ -380,19 +434,6 @@ class EnhancedJingwuGenerator:
         Returns:
             bool: 生成是否成功
         """
-        return self._generate_video_with_timelines(
-            main_timeline, aux_timeline, audio_path, output_path,
-            background_image, t_max_sec, draft_mode
-        )
-
-    def _generate_video_with_timelines(self,
-                                     main_timeline: 'LyricTimeline',
-                                     aux_timeline: Optional['LyricTimeline'] = None,
-                                     audio_path: str = "",
-                                     output_path: str = "",
-                                     background_image: Optional[str] = None,
-                                     t_max_sec: float = float('inf'),
-                                     draft_mode: bool = False) -> bool:
         """使用LyricTimeline对象生成视频的核心方法"""
 
         # 确定生成模式

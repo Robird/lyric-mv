@@ -384,6 +384,82 @@ class LyricTimeline(LayoutElement):
         """获取最大行数（公共只读属性）"""
         return self._max_lines
 
+    def get_content_at_time(self, t: float):
+        """获取指定时间点的歌词内容
+
+        Args:
+            t: 时间点（秒）
+
+        Returns:
+            歌词内容或None
+        """
+        # 查找当前时间的歌词
+        for i, (start_time, text) in enumerate(self.lyrics_data):
+            duration = self._calculate_lyric_duration(i)
+
+            if start_time <= t < start_time + duration:
+                return {
+                    'text': text,
+                    'start_time': start_time,
+                    'duration': duration,
+                    'index': i
+                }
+
+        return None
+
+    def _calculate_lyric_duration(self, lyric_index: int) -> float:
+        """计算歌词持续时间
+
+        Args:
+            lyric_index: 歌词索引
+
+        Returns:
+            持续时间（秒）
+        """
+        if lyric_index >= len(self.lyrics_data):
+            return 3.0  # 默认持续时间
+
+        current_time = self.lyrics_data[lyric_index][0]
+
+        # 如果有下一句歌词，使用下一句的开始时间
+        if lyric_index + 1 < len(self.lyrics_data):
+            next_time = self.lyrics_data[lyric_index + 1][0]
+            return next_time - current_time
+
+        # 最后一句歌词，使用默认持续时间
+        return 3.0
+
+    def get_animation_progress(self, t: float, start_time: float,
+                             duration: float, animation_duration: float = 0.3) -> float:
+        """计算动画进度
+
+        Args:
+            t: 当前时间
+            start_time: 歌词开始时间
+            duration: 歌词持续时间
+            animation_duration: 动画持续时间
+
+        Returns:
+            动画进度 (0.0-1.0)
+        """
+        if t < start_time or t >= start_time + duration:
+            return 0.0
+
+        relative_time = t - start_time
+
+        # 淡入动画
+        if relative_time <= animation_duration:
+            return relative_time / animation_duration
+
+        # 淡出动画
+        fade_out_start = duration - animation_duration
+        if relative_time >= fade_out_start:
+            fade_out_progress = (relative_time - fade_out_start) / animation_duration
+            return 1.0 - fade_out_progress
+
+        # 完全显示
+        return 1.0
+
     def get_processed_lyrics(self, max_duration: float = float('inf')) -> List[Tuple[float, List[str]]]:
         """获取预处理后的歌词数据，供策略类使用
 
