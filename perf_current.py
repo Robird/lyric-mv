@@ -25,7 +25,8 @@ def profile_current_version():
         # 运行视频生成
         success = demo_enhanced_features(
             config_path=config_path,
-            t_max_sec=60.0
+            t_max_sec=60.0,
+            out_suffix=".perf"
         )
         
         if success:

@@ -303,8 +303,9 @@ class LyricTimeline(LayoutElement):
             next_time = self.lyrics_data[lyric_index + 1][0]
             return next_time - current_time
 
-        # 最后一句歌词，使用默认持续时间
-        return 3.0
+        # 最后一句歌词
+        # TODO:AI 考虑返回float('inf'),让最有一句歌词持续到视频结束
+        return 10.0
 
     def get_animation_progress(self, t: float, start_time: float,
                              duration: float, animation_duration: float = 0.3) -> float:
@@ -336,6 +337,20 @@ class LyricTimeline(LayoutElement):
 
         # 完全显示
         return 1.0
+
+    def render(self, frame_buffer: 'np.ndarray', context: 'RenderContext'):
+        """渲染歌词到帧缓冲区（OpenCV优化版本）
+
+        Args:
+            frame_buffer: 目标帧缓冲区 (height, width, 3) - RGB格式
+            context: 渲染上下文
+        """
+        # 这个方法将在第二阶段实现OpenCV优化渲染
+        # 目前先保持与原有逻辑兼容，后续会添加：
+        # 1. 预计算和缓存文字图片
+        # 2. OpenCV alpha blending
+        # 3. 性能优化
+        pass
 
     def get_processed_lyrics(self, max_duration: float = float('inf')) -> List[Tuple[float, List[str]]]:
         """获取预处理后的歌词数据，供策略类使用

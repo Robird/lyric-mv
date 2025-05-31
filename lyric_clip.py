@@ -16,7 +16,7 @@ from layout_engine import LayoutEngine
 from lyric_content import LyricContent, LyricContentFactory, RenderContext
 from font_cache import FontCache, detect_text_language
 
-
+# TODO:AI 重构LyricClip。预计算和缓存文字图片。在此基础上，使用帧缓冲区和opencv的alpha blending来实现歌词的渲染和合成。
 class LyricClip(VideoClip):
     """歌词视频片段容器
 
@@ -29,7 +29,8 @@ class LyricClip(VideoClip):
                  layout_engine: LayoutEngine,
                  size: Tuple[int, int],
                  duration: float,
-                 fps: float = 30):
+                 fps: float = 24,
+                 background: Optional[np.ndarray] = None):
         """初始化LyricClip
 
         Args:
@@ -38,11 +39,15 @@ class LyricClip(VideoClip):
             size: 视频尺寸 (width, height)
             duration: 视频时长
             fps: 帧率
+            background: 背景图片数组 (height, width, 3) - RGB格式。 TODO:AI 稍后会升级到类似.lrc文件那样的BackgroundTimeline,内部是时间控制的图片序列，在加载时就预计算好尺寸和缩放。
         """
         self.timelines = timelines
         self.layout_engine = layout_engine
         self.video_size = size
         self.fps = fps
+
+        # 处理背景图片：检查尺寸并进行缩放和居中对齐
+        self.background = self._prepare_background(background, size)
 
         # 预计算布局
         self.layout_result = layout_engine.calculate_layout(size[0], size[1])
@@ -53,6 +58,11 @@ class LyricClip(VideoClip):
             if timeline.element_id in self.layout_result.element_positions:
                 self._timeline_positions[timeline.element_id] = self.layout_result.element_positions[timeline.element_id]
 
+        # 初始化帧缓冲区（必须在super().__init__之前，因为MoviePy会立即调用get_frame(0)）
+        self.frame_buffer = np.ndarray((self.video_size[1], self.video_size[0], 3), dtype=np.uint8)
+        # self.frame_buffer_view = self.frame_buffer[:, :, :3] # 目前分析发现帧缓冲并不需要alpha通道
+        self.frame_buffer_view = self.frame_buffer
+
         # 初始化VideoClip，使用frame_function
         super().__init__(
             frame_function=self._render_frame,
@@ -62,6 +72,63 @@ class LyricClip(VideoClip):
         self.size = size
         self.fps = fps
 
+    def _prepare_background(self, background: Optional[np.ndarray],
+                          target_size: Tuple[int, int]) -> Optional[np.ndarray]:
+        """准备背景图片：检查尺寸并进行缩放和居中对齐
+
+        Args:
+            background: 原始背景图片数组 (height, width, 3) - RGB格式
+            target_size: 目标尺寸 (width, height)
+
+        Returns:
+            处理后的背景图片数组或None
+        """
+        if background is None:
+            return None
+
+        target_width, target_height = target_size
+        bg_height, bg_width = background.shape[:2]
+
+        # 如果尺寸已经匹配，直接返回
+        if bg_width == target_width and bg_height == target_height:
+            return background.copy()
+
+        # 需要缩放和居中对齐
+        print(f"   背景图片尺寸调整: {bg_width}x{bg_height} -> {target_width}x{target_height}")
+
+        # 使用PIL进行高质量缩放
+        from PIL import Image
+        bg_image = Image.fromarray(background)
+
+        # 计算缩放比例，保持宽高比
+        scale_w = target_width / bg_width
+        scale_h = target_height / bg_height
+        scale = min(scale_w, scale_h)  # 使用较小的缩放比例以确保图片完全适应
+
+        # 计算缩放后的尺寸
+        new_width = int(bg_width * scale)
+        new_height = int(bg_height * scale)
+
+        # 缩放图片
+        try:
+            bg_image = bg_image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        except AttributeError:
+            # 较旧的PIL版本回退
+            bg_image = bg_image.resize((new_width, new_height))
+
+        # 创建目标尺寸的黑色背景
+        result = np.zeros((target_height, target_width, 3), dtype=np.uint8)
+
+        # 计算居中位置
+        x_offset = (target_width - new_width) // 2
+        y_offset = (target_height - new_height) // 2
+
+        # 将缩放后的图片放置到居中位置
+        bg_array = np.array(bg_image)
+        result[y_offset:y_offset+new_height, x_offset:x_offset+new_width] = bg_array
+
+        return result
+
     def _render_frame(self, t: float) -> np.ndarray:
         """核心渲染方法：在时间t渲染完整的歌词帧
 
@@ -69,10 +136,14 @@ class LyricClip(VideoClip):
             t: 当前时间
 
         Returns:
-            渲染的帧数据 (height, width, 3)
+            渲染的帧数据 (height, width, 3) - RGB格式
         """
-        # 创建空白画布 (透明背景)
-        frame = np.zeros((self.video_size[1], self.video_size[0], 4), dtype=np.uint8)
+        # 擦除画布
+        if self.background is not None:
+            # TODO:AI 当background升级到BackgroundTimeline时，这里需要改为使用background.reset_frame(self.frame_buffer,t)，在reset_frame内部使用opencv的alpha blending来实现背景序列间的平滑过渡。
+            self.frame_buffer[:, :] = self.background
+        else:
+            self.frame_buffer.fill(0)
 
         # 创建渲染上下文
         context = RenderContext(
@@ -84,11 +155,14 @@ class LyricClip(VideoClip):
 
         # 遍历所有时间轴，渲染当前时间的歌词
         for timeline in self.timelines:
-            self._render_timeline_at_time(frame, timeline, t, context)
+            # 使用timeline的render方法（第二阶段将实现OpenCV优化）
+            if hasattr(timeline, 'render') and callable(getattr(timeline, 'render')):
+                timeline.render(self.frame_buffer, context)
+            else:
+                # 回退到原有渲染方式
+                self._render_timeline_at_time(self.frame_buffer, timeline, t, context)
 
-        # 转换为RGB格式（MoviePy期望的格式）
-        rgb_frame = frame[:, :, :3]  # 去掉alpha通道
-        return rgb_frame
+        return self.frame_buffer_view
 
     def _render_timeline_at_time(self, frame: np.ndarray,
                                timeline: LyricTimeline,

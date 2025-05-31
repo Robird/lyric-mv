@@ -6,7 +6,7 @@
 import os
 import time
 from typing import List, Optional
-from moviepy import AudioFileClip, ImageClip, CompositeVideoClip, ColorClip
+from moviepy import AudioFileClip, ImageClip, CompositeVideoClip
 from PIL import Image, ImageFilter, ImageEnhance
 import numpy as np
 import traceback
@@ -16,7 +16,7 @@ from lrc_mv_config import load_lrc_mv_config
 # 导入LyricTimeline相关类
 from lyric_timeline import LyricTimeline, LyricDisplayMode
 from layout_engine import LayoutEngine, VerticalStackStrategy
-from lyric_clip import LyricClip, create_lyric_clip
+from lyric_clip import LyricClip
 
 DEFAULT_WIDTH = 720
 DEFAULT_HEIGHT = 1280
@@ -88,12 +88,14 @@ class EnhancedJingwuGenerator:
     # 所有歌词渲染现在通过LyricClip的统一frame_function处理
 
     def create_lyric_clip(self, timelines: List[LyricTimeline],
-                         duration: float) -> LyricClip:
+                         duration: float,
+                         background: Optional[np.ndarray] = None) -> LyricClip:
         """创建LyricClip（新方式）
 
         Args:
             timelines: 歌词时间轴列表
             duration: 视频时长
+            background: 背景图片数组（可选）
 
         Returns:
             LyricClip实例
@@ -106,30 +108,30 @@ class EnhancedJingwuGenerator:
             layout_engine.add_element(timeline)
 
         # 创建LyricClip
-        return create_lyric_clip(
+        return LyricClip(
             timelines=timelines,
             layout_engine=layout_engine,
             size=(self.width, self.height),
             duration=duration,
-            fps=self.fps
+            fps=self.fps,
+            background=background
         )
 
     def _generate_video_with_lyric_clip(self, lyric_clip: LyricClip,
-                                       background_clip, audio_clip,
+                                       audio_clip,
                                        output_path: str, draft_mode: bool = False):
-        """使用LyricClip的视频生成方法
+        """使用LyricClip的视频生成方法（背景已集成到LyricClip中）
 
         Args:
-            lyric_clip: LyricClip实例
-            background_clip: 背景片段
+            lyric_clip: LyricClip实例（已包含背景处理）
             audio_clip: 音频片段
             output_path: 输出路径
             draft_mode: 草稿模式
         """
         print("使用LyricClip合成视频...")
 
-        # 合成视频（背景 + LyricClip）
-        all_clips = [background_clip, lyric_clip]
+        # 只需要LyricClip，背景已经集成在其中
+        all_clips = [lyric_clip]
 
         # 使用现有的合成和导出逻辑
         self._finalize_and_export_video(
@@ -201,32 +203,32 @@ class EnhancedJingwuGenerator:
         return validated_clips
 
     # --- BEGIN PRIVATE HELPER METHODS ---
-    def _create_video_background(
+
+    def _load_background_array(
         self,
-        duration: float,
         background_image_path: Optional[str] = None
-    ) -> ImageClip:
-        """(Helper) 创建视频背景片段（图片或纯黑）。"""
+    ) -> Optional[np.ndarray]:
+        """加载背景图片为ndarray，如果没有背景图片则返回None"""
         if background_image_path and os.path.exists(background_image_path):
             bg_array = self.load_background_image(background_image_path)
             if bg_array is not None:
                 print(f"   使用背景图片: {background_image_path}")
-                return ImageClip(bg_array, duration=duration)
+                return bg_array
             else:
-                print("   背景图片加载失败，使用纯黑背景替代。")
-                return ColorClip(size=(self.width, self.height), color=(0,0,0), duration=duration)
+                print("   背景图片加载失败，将使用纯黑背景。")
+                return None
         else:
             if background_image_path:
-                print(f"   背景图片路径不存在: {background_image_path}。使用纯黑背景。")
+                print(f"   背景图片路径不存在: {background_image_path}。将使用纯黑背景。")
             else:
-                print("   未使用背景图片，使用纯黑背景。")
-            return ColorClip(size=(self.width, self.height), color=(0,0,0), duration=duration)
+                print("   未使用背景图片，将使用纯黑背景。")
+            return None
 
 
 
     def _finalize_and_export_video(
         self,
-        all_clips: List[ImageClip],
+        all_clips: List,  # 可以是ImageClip或LyricClip的列表
         audio_clip: AudioFileClip,
         output_path: str,
         temp_audio_file_suffix: str = "generic",
@@ -393,9 +395,9 @@ class EnhancedJingwuGenerator:
             for element_id, rect in layout_result.element_positions.items():
                 print(f"时间轴 {element_id} 布局区域: {rect}")
 
-            # 背景处理（保持原有逻辑）
-            print("创建背景...")
-            background_clip = self._create_video_background(duration, background_image)
+            # 背景处理（加载为ndarray）
+            print("加载背景...")
+            background_array = self._load_background_array(background_image)
 
             # 使用新的LyricClip统一渲染管道
             print("创建LyricClip统一渲染容器...")
@@ -405,14 +407,13 @@ class EnhancedJingwuGenerator:
             for element in layout_engine.elements:
                 timelines.append(element)
 
-            # 创建LyricClip（新方式）
-            lyric_clip = self.create_lyric_clip(timelines, duration)
+            # 创建LyricClip（新方式，背景已集成）
+            lyric_clip = self.create_lyric_clip(timelines, duration, background_array)
             print(f"   ✅ LyricClip创建成功，包含 {len(timelines)} 个时间轴")
 
             # 使用LyricClip进行视频合成（新方式）
             self._generate_video_with_lyric_clip(
                 lyric_clip=lyric_clip,
-                background_clip=background_clip,
                 audio_clip=audio,
                 output_path=output_path,
                 draft_mode=draft_mode
@@ -426,7 +427,8 @@ class EnhancedJingwuGenerator:
             traceback.print_exc()
             return False
 
-def demo_enhanced_features(config_path: Path, t_max_sec: float = float('inf'), draft_mode: bool = False):
+def demo_enhanced_features(config_path: Path, t_max_sec: float = float('inf'), draft_mode: bool = False,
+                           out_suffix=""):
     """使用配置文件生成歌词视频 (纯OOP版)
 
     Args:
@@ -470,6 +472,9 @@ def demo_enhanced_features(config_path: Path, t_max_sec: float = float('inf'), d
     audio_path = config.get_audio_path()
     background_path = config.get_background_path()
     output_path = config.get_output_path()
+    if out_suffix:
+        output_path = output_path.parent / (output_path.stem + out_suffix + output_path.suffix)
+        print(f"   应用文件后缀: {out_suffix}，输出文件: {output_path}")
 
     # 使用LyricTimeline OOP接口
     print("使用LyricTimeline OOP接口")
@@ -559,18 +564,18 @@ def demo_enhanced_features(config_path: Path, t_max_sec: float = float('inf'), d
 
     return success
 
-def demo_draft_mode(config_path: Path, t_max_sec: float = float('inf')):
+def demo_draft_mode(config_path: Path, t_max_sec: float = 20):
     """草稿模式演示 - 快速生成用于开发测试"""
     print("🚀 草稿模式演示 - 快速编码")
     print("=" * 50)
     print("注意: 草稿模式使用快速编码设置，质量较低但速度更快，适合开发测试使用")
     print()
 
-    return demo_enhanced_features(config_path, t_max_sec, draft_mode=True)
+    return demo_enhanced_features(config_path, t_max_sec, draft_mode=True, out_suffix=".draft")
 
 if __name__ == "__main__":
     # 默认使用草稿模式进行快速测试
-    # demo_draft_mode(Path(r"精武英雄\lrc-mv.yaml"), t_max_sec=20.0)
+    demo_draft_mode(Path(r"精武英雄\lrc-mv.yaml"))
 
     # 如需产品质量，取消注释下面这行
-    demo_enhanced_features(Path(r"精武英雄\lrc-mv.yaml"))
+    # demo_enhanced_features(Path(r"精武英雄\lrc-mv.yaml"), out_suffix=".full")
