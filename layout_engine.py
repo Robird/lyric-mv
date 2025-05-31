@@ -12,7 +12,7 @@ Layout Engine - 布局引擎模块
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional
 from dataclasses import dataclass
 
 # 导入布局相关的数据类型
@@ -34,10 +34,9 @@ class LayoutElement(ABC):
         """计算所需的显示区域"""
         pass
 
-    @abstractmethod
-    def generate_clips(self, generator: Any, duration: float) -> List[Any]:
-        """生成视频片段"""
-        pass
+    # generate_clips方法已移除
+    # 新的LyricClip架构不再需要布局元素生成片段
+    # 所有渲染现在通过LyricClip的统一frame_function处理
 
     @property
     @abstractmethod

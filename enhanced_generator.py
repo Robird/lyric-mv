@@ -7,7 +7,7 @@ import os
 import time
 from typing import List, Optional
 from moviepy import AudioFileClip, ImageClip, CompositeVideoClip, ColorClip
-from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
+from PIL import Image, ImageFilter, ImageEnhance
 import numpy as np
 import traceback
 from pathlib import Path
@@ -79,119 +79,13 @@ class EnhancedJingwuGenerator:
             gradient[y, :] = [r, g, b]
         return gradient
 
-    def create_enhanced_text_image(self, text: str, font_size: int, color: str,
-                                 width: int, height: int, y_position: int,
-                                 glow: bool = False) -> np.ndarray:
-        """创建增强文字图像，支持发光效果和多行文本"""
-        scale = 2
-        scaled_width = width * scale
-        scaled_height = height * scale
-        scaled_font_size = font_size * scale
+    # create_enhanced_text_image方法已移除
+    # 新的LyricClip架构使用统一的frame_function渲染管道
+    # 文本渲染现在通过lyric_clip.py中的LyricClip._render_lyric_on_frame()处理
 
-        img = Image.new('RGBA', (scaled_width, scaled_height), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(img)
-
-        try:
-            has_chinese = any('\u4e00' <= char <= '\u9fff' for char in text)
-            if has_chinese:
-                font = ImageFont.truetype("simsun.ttc", scaled_font_size)
-            else:
-                try:
-                    font = ImageFont.truetype("arial.ttf", scaled_font_size)
-                except OSError:
-                    try:
-                        font = ImageFont.truetype("calibri.ttf", scaled_font_size)
-                    except OSError:
-                        font = ImageFont.load_default()
-        except OSError:
-            font = ImageFont.load_default()
-
-        # 处理多行文本
-        lines = text.split('\n')
-        line_height = int(scaled_font_size * 1.2)  # 行高为字体大小的1.2倍
-
-        # 计算总文本高度和每行的宽度
-        total_text_height = len(lines) * line_height
-        line_widths = []
-        for line in lines:
-            if line.strip():  # 跳过空行
-                bbox = draw.textbbox((0, 0), line, font=font)
-                line_widths.append(bbox[2] - bbox[0])
-            else:
-                line_widths.append(0)
-
-        # 计算起始Y位置（居中对齐）
-        start_y = y_position * scale - total_text_height // 2
-
-        # 渲染每一行
-        for i, line in enumerate(lines):
-            if not line.strip():  # 跳过空行
-                continue
-
-            line_width = line_widths[i]
-            x = (scaled_width - line_width) // 2  # 水平居中
-            y = start_y + i * line_height
-
-            # 发光效果
-            if glow and color == '#FFD700':
-                for offset in range(8, 0, -1):
-                    for dx in range(-offset, offset + 1):
-                        for dy in range(-offset, offset + 1):
-                            if dx * dx + dy * dy <= offset * offset:
-                                alpha = max(0, 120 - offset * 15)
-                                glow_rgba = (255, 215, 0, alpha)
-                                draw.text((x + dx, y + dy), line, fill=glow_rgba, font=font)
-
-            # 阴影效果
-            shadow_color_val = (0, 0, 0, 200)
-            draw.text((x + 3 * scale, y + 3 * scale), line, fill=shadow_color_val, font=font)
-
-            # 主文字
-            main_color = (255, 215, 0, 255) if color == '#FFD700' else (255, 255, 255, 255)
-            draw.text((x, y), line, fill=main_color, font=font)
-
-        # PIL版本兼容性处理
-        try:
-            img = img.resize((width, height), Image.Resampling.LANCZOS)
-        except AttributeError:
-            # 较旧的PIL版本回退
-            img = img.resize((width, height))
-
-        return np.array(img)
-
-    def create_lyric_clip_with_animation(self, text: str, start_time: float, duration: float,
-                                       is_highlighted: bool = False, y_position: Optional[int] = None,
-                                       animation: str = 'fade', font_size: Optional[int] = None) -> ImageClip:
-        """创建带动画效果的歌词片段"""
-        if y_position is None:
-            y_position = self.height // 2
-
-        # 使用传入的字体大小，如果没有则使用默认值
-        if font_size is None:
-            font_size = self.default_font_size if is_highlighted else self.default_font_size - 20
-
-        color = self.highlight_color if is_highlighted else self.default_font_color
-
-        text_img_array = self.create_enhanced_text_image(
-            text, font_size, color, self.width, self.height, y_position,
-            glow=is_highlighted
-        )
-
-        clip = ImageClip(text_img_array, duration=duration)
-        clip = clip.with_start(start_time)
-          # 简化动画效果以避免渲染问题
-        if animation == 'fade':
-            if duration > 0.6:
-                from moviepy.video.fx import CrossFadeIn, CrossFadeOut
-                clip = clip.with_effects([CrossFadeIn(0.3), CrossFadeOut(0.3)])
-        elif animation == 'slide':
-            clip = clip.with_position(lambda t: (-self.width + int(t * self.width / 0.5), 'center') if t < 0.5 else ('center', 'center'))
-        # 暂时禁用zoom动画以避免PIL兼容性问题
-        # elif animation == 'zoom':
-        #     if is_highlighted:
-        #         clip = clip.resize(lambda t: 0.8 + 0.2 * min(t / 0.3, 1))
-
-        return clip
+    # create_lyric_clip_with_animation方法已移除
+    # 新的LyricClip架构不再需要为每句歌词创建单独的ImageClip
+    # 所有歌词渲染现在通过LyricClip的统一frame_function处理
 
     def create_lyric_clip(self, timelines: List[LyricTimeline],
                          duration: float) -> LyricClip:
@@ -502,34 +396,25 @@ class EnhancedJingwuGenerator:
             # 背景处理（保持原有逻辑）
             print("创建背景...")
             background_clip = self._create_video_background(duration, background_image)
-            all_video_clips = [background_clip]
 
-            # 使用布局引擎统一生成所有时间轴片段
-            print("生成歌词片段...")
-            all_timeline_clips = []
+            # 使用新的LyricClip统一渲染管道
+            print("创建LyricClip统一渲染容器...")
 
-            # 遍历布局引擎中的所有元素生成片段
+            # 收集所有时间轴
+            timelines = []
             for element in layout_engine.elements:
-                element_clips = element.generate_clips(self, duration)
+                timelines.append(element)
 
-                # 验证片段时长
-                print(f"验证 {element.element_id} 片段时长...")
-                validated_clips = self._validate_clips_duration(element_clips, duration)
-                all_timeline_clips.extend(validated_clips)
+            # 创建LyricClip（新方式）
+            lyric_clip = self.create_lyric_clip(timelines, duration)
+            print(f"   ✅ LyricClip创建成功，包含 {len(timelines)} 个时间轴")
 
-            # 添加所有歌词片段到视频
-            all_video_clips.extend(all_timeline_clips)
-            num_lyric_clips = len(all_timeline_clips)
-
-            print(f"   创建了 {num_lyric_clips} 个歌词片段 (总共 {len(all_video_clips)} 个视频片段包括背景)")
-
-            # 最终合成（保持原有逻辑）
-            temp_suffix = "bilingual" if is_bilingual_mode else "enhanced"
-            self._finalize_and_export_video(
-                all_clips=all_video_clips,
+            # 使用LyricClip进行视频合成（新方式）
+            self._generate_video_with_lyric_clip(
+                lyric_clip=lyric_clip,
+                background_clip=background_clip,
                 audio_clip=audio,
                 output_path=output_path,
-                temp_audio_file_suffix=temp_suffix,
                 draft_mode=draft_mode
             )
 

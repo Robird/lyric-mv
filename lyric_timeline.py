@@ -14,7 +14,7 @@ import re
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Optional, Dict, Any
 from enum import Enum
-from moviepy import ImageClip
+# ImageClip导入已移除 - 新的LyricClip架构不再需要创建ImageClip
 
 # 导入布局相关的数据类型
 from layout_types import LyricRect, LyricStyle
@@ -52,11 +52,9 @@ class LyricDisplayStrategy(ABC):
         """计算所需的显示区域"""
         pass
 
-    @abstractmethod
-    def generate_clips(self, timeline: 'LyricTimeline',
-                      generator: Any, duration: float) -> List[ImageClip]:
-        """生成歌词视频片段"""
-        pass
+    # generate_clips方法已移除
+    # 新的LyricClip架构不再需要策略类生成ImageClip
+    # 所有渲染现在通过LyricClip的统一frame_function处理
 
     def get_strategy_info(self) -> Dict[str, Any]:
         """获取策略信息"""
@@ -95,59 +93,9 @@ class SimpleFadeStrategy(LyricDisplayStrategy):
             height=total_height
         )
 
-    def generate_clips(self, timeline: 'LyricTimeline',
-                      generator: Any, duration: float) -> List[ImageClip]:
-        """生成简单淡入淡出片段
-
-        Args:
-            timeline: 歌词时间轴对象
-            generator: 视频生成器对象
-            duration: 视频总时长限制
-
-        Returns:
-            生成的视频片段列表，所有片段都严格遵守时长限制
-        """
-        clips = []
-        # 使用新接口：获取预处理后的歌词数据（字符串数组）
-        processed_lyrics = timeline.get_processed_lyrics(duration)
-        rect = self.calculate_required_rect(timeline, generator.width, generator.height)
-
-        for i, (start_time, lines) in enumerate(processed_lyrics):
-            # 计算结束时间，确保不超过总时长限制
-            if i < len(processed_lyrics) - 1:
-                end_time = min(processed_lyrics[i + 1][0], duration)
-            else:
-                end_time = duration
-
-            # 确保开始时间在时长限制内
-            if start_time >= duration:
-                print(f"   跳过歌词（开始时间超出限制 {start_time:.2f}s >= {duration:.2f}s）: '{lines}'")
-                continue
-
-            lyric_duration = end_time - start_time
-            if lyric_duration <= 0.01:
-                print(f"   跳过歌词（时长过短 {lyric_duration:.2f}s）: '{lines}'")
-                continue
-
-            # 最终验证：确保片段不会超出时长限制
-            if start_time + lyric_duration > duration:
-                lyric_duration = duration - start_time
-                print(f"   调整歌词时长以符合限制: '{lines}' -> {lyric_duration:.2f}s")
-
-            # 重新组合为文本（保持与渲染器的接口兼容）
-            text = '\n'.join(lines)
-
-            # 传递字体大小到生成器
-            clip = generator.create_lyric_clip_with_animation(
-                text, start_time, lyric_duration,
-                is_highlighted=self.is_highlighted,
-                y_position=rect.y + rect.height // 2,
-                animation=timeline.style.animation_style,
-                font_size=timeline.style.font_size
-            )
-            clips.append(clip)
-
-        return clips
+    # generate_clips方法已移除
+    # SimpleFadeStrategy现在只负责计算布局区域
+    # 实际渲染由LyricClip的统一frame_function处理
 
 class EnhancedPreviewStrategy(LyricDisplayStrategy):
     """增强预览模式：当前歌词+下一句预览
@@ -185,78 +133,9 @@ class EnhancedPreviewStrategy(LyricDisplayStrategy):
             height=total_height
         )
 
-    def generate_clips(self, timeline: 'LyricTimeline',
-                      generator: Any, duration: float) -> List[ImageClip]:
-        """生成增强预览片段
-
-        这里封装了原有enhanced_generator.py中的增强模式逻辑
-
-        Args:
-            timeline: 歌词时间轴对象
-            generator: 视频生成器对象
-            duration: 视频总时长限制
-
-        Returns:
-            生成的视频片段列表，包括当前歌词和预览歌词，所有片段都严格遵守时长限制
-        """
-        clips = []
-        # 使用新接口：获取预处理后的歌词数据（字符串数组）
-        processed_lyrics = timeline.get_processed_lyrics(duration)
-        center_y = generator.height // 2
-
-        for i, (start_time, lines) in enumerate(processed_lyrics):
-            # 计算结束时间，确保不超过总时长限制
-            if i < len(processed_lyrics) - 1:
-                end_time = min(processed_lyrics[i + 1][0], duration)
-            else:
-                end_time = duration
-
-            # 确保开始时间在时长限制内
-            if start_time >= duration:
-                print(f"   跳过主歌词（开始时间超出限制 {start_time:.2f}s >= {duration:.2f}s）: '{lines}'")
-                continue
-
-            lyric_duration = end_time - start_time
-            if lyric_duration <= 0.01:
-                print(f"   跳过主歌词（时长过短 {lyric_duration:.2f}s）: '{lines}'")
-                continue
-
-            # 最终验证：确保片段不会超出时长限制
-            if start_time + lyric_duration > duration:
-                lyric_duration = duration - start_time
-                print(f"   调整主歌词时长以符合限制: '{lines}' -> {lyric_duration:.2f}s")
-
-            # 重新组合为文本（保持与渲染器的接口兼容）
-            text = '\n'.join(lines)
-
-            # 当前歌词（高亮）- 传递字体大小到生成器
-            current_clip = generator.create_lyric_clip_with_animation(
-                text, start_time, lyric_duration,
-                is_highlighted=True,
-                y_position=center_y + self.current_y_offset,
-                animation=timeline.style.animation_style,
-                font_size=timeline.style.font_size
-            )
-            clips.append(current_clip)
-
-            # 下一句预览（非高亮）- 对应原来的next_clip
-            if i < len(processed_lyrics) - 1:
-                next_lines = processed_lyrics[i + 1][1]
-                next_text = '\n'.join(next_lines)  # 重新组合下一句
-                # 预览歌词也需要遵守时长限制
-                if start_time + lyric_duration <= duration:
-                    # 预览歌词使用稍小的字体
-                    preview_font_size = max(10, timeline.style.font_size - 20)
-                    preview_clip = generator.create_lyric_clip_with_animation(
-                        next_text, start_time, lyric_duration,
-                        is_highlighted=False,
-                        y_position=center_y + self.preview_y_offset,
-                        animation='fade',  # 预览总是使用fade动画
-                        font_size=preview_font_size
-                    )
-                    clips.append(preview_clip)
-
-        return clips
+    # generate_clips方法已移除
+    # EnhancedPreviewStrategy现在只负责计算布局区域
+    # 增强预览逻辑将在LyricClip中实现
 
 
 
@@ -373,11 +252,9 @@ class LyricTimeline(LayoutElement):
             raise ValueError("显示策略未设置")
         return self._strategy.calculate_required_rect(self, video_width, video_height)
 
-    def generate_clips(self, generator: Any, duration: float) -> List[ImageClip]:
-        """生成视频片段"""
-        if not self._strategy:
-            raise ValueError("显示策略未设置")
-        return self._strategy.generate_clips(self, generator, duration)
+    # generate_clips方法已移除
+    # 新的LyricClip架构不再需要LyricTimeline生成ImageClip
+    # 所有渲染现在通过LyricClip的统一frame_function处理
 
     @property
     def max_lines(self) -> int:

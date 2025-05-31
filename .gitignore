@@ -7,3 +7,5 @@ outdated/
 精武英雄/
 perf_optim/
 docs/Zulko/
+test_*.py
+temp-audio-lyric_clip-*.m4a

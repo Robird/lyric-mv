@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw
 
 from lyric_timeline import LyricTimeline
 from layout_engine import LayoutEngine
-from layout_types import LyricRect
+# LyricRect导入已移除 - 布局信息现在通过LyricContent传递
 from lyric_content import LyricContent, LyricContentFactory, RenderContext
 from font_cache import FontCache, detect_text_language
 

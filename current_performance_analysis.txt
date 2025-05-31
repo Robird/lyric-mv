@@ -1,0 +1,249 @@
+MoviePy 2.1.2 性能分析报告
+==================================================
+
+完整统计信息:
+         1851958 function calls (1809619 primitive calls) in 151.038 seconds
+
+   Ordered by: cumulative time
+   List reduced from 1166 to 20 due to restriction <20>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000  150.975  150.975 E:\repos\jingwu-hero\enhanced_generator.py:429(demo_enhanced_features)
+        1    0.000    0.000  150.962  150.962 E:\repos\jingwu-hero\enhanced_generator.py:309(generate_bilingual_video)
+  19937/8    0.158    0.000  150.837   18.855 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\moviepy\decorators.py:89(wrapper)
+        1    0.003    0.003  150.760  150.760 E:\repos\jingwu-hero\enhanced_generator.py:117(_generate_video_with_lyric_clip)
+        1    0.000    0.000  150.758  150.758 E:\repos\jingwu-hero\enhanced_generator.py:227(_finalize_and_export_video)
+        1    0.000    0.000  150.728  150.728 <decorator-gen-62>:1(write_videofile)
+   1329/1    0.004    0.000  150.728  150.728 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\moviepy\decorators.py:47(requires_duration)
+        1    0.000    0.000  150.728  150.728 <decorator-gen-61>:1(write_videofile)
+      2/1    0.000    0.000  150.728  150.728 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\moviepy\decorators.py:143(wrapper)
+        1    0.000    0.000  150.728  150.728 <decorator-gen-60>:1(write_videofile)
+        1    0.000    0.000  150.728  150.728 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\moviepy\decorators.py:19(convert_masks_to_RGB)
+        1    0.000    0.000  150.728  150.728 <decorator-gen-59>:1(write_videofile)
+        1    0.000    0.000  150.728  150.728 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\moviepy\video\VideoClip.py:204(write_videofile)
+        1    4.679    4.679  149.076  149.076 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\moviepy\video\io\ffmpeg_writer.py:242(ffmpeg_write_video)
+14169/4205    0.030    0.000  130.591    0.031 <decorator-gen-17>:1(get_frame)
+14169/4205    1.107    0.000  130.508    0.031 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\moviepy\Clip.py:66(get_frame)
+     2880    7.506    0.003  129.071    0.045 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\moviepy\video\compositing\CompositeVideoClip.py:130(frame_function)
+     1441    0.308    0.000   96.431    0.067 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\moviepy\Clip.py:510(iter_frames)
+     2880    1.053    0.000   64.215    0.022 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\moviepy\video\VideoClip.py:720(compose_on)
+     2880   27.309    0.009   32.876    0.011 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\moviepy\video\VideoClip.py:796(compose_mask)
+
+
+
+
+PIL相关:
+         1851958 function calls (1809619 primitive calls) in 151.038 seconds
+
+   Ordered by: cumulative time
+   List reduced from 1166 to 170 due to restriction <'PIL'>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+     2880    0.019    0.000   22.050    0.008 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:3579(alpha_composite)
+     2880   21.945    0.008   21.945    0.008 {built-in method PIL._imaging.alpha_composite}
+     5762    0.047    0.000    9.870    0.002 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:927(convert)
+     5760    0.180    0.000    7.371    0.001 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:3241(fromarray)
+     5760    0.030    0.000    7.181    0.001 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:3157(frombuffer)
+     4320    0.036    0.000    7.075    0.002 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:3111(frombytes)
+    11524    0.077    0.000    6.885    0.001 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:3059(new)
+    18528    6.715    0.000    6.715    0.000 {built-in method PIL._imaging.fill}
+     7004    0.034    0.000    6.193    0.001 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageDraw.py:557(text)
+     7004    0.084    0.000    6.125    0.001 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageDraw.py:612(draw_text)
+     7004    0.017    0.000    4.729    0.001 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFont.py:549(getmask2)
+     4323    0.347    0.000    4.433    0.001 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:726(__array_interface__)
+     4323    0.116    0.000    4.046    0.001 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:764(tobytes)
+     4320    0.028    0.000    2.944    0.001 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:843(frombytes)
+    10506    0.029    0.000    2.691    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFont.py:392(getbbox)
+     2880    0.026    0.000    1.160    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:1728(paste)
+     1440    0.009    0.000    0.831    0.001 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:1935(putalpha)
+     1441    0.004    0.000    0.676    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:1263(copy)
+    21610    0.152    0.000    0.218    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:588(_new)
+    28815    0.050    0.000    0.127    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:880(load)
+     7004    0.014    0.000    0.085    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFont.py:635(fill)
+    33135    0.064    0.000    0.073    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:543(__init__)
+     4321    0.043    0.000    0.069    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:414(_getdecoder)
+     2882    0.013    0.000    0.066    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageDraw.py:994(Draw)
+    60510    0.035    0.000    0.059    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:553(im)
+     4323    0.032    0.000    0.049    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:439(_getencoder)
+    21604    0.027    0.000    0.049    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:3040(_check_size)
+     4323    0.030    0.000    0.039    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:244(_conv_type_shape)
+     2882    0.014    0.000    0.037    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageDraw.py:66(__init__)
+        1    0.000    0.000    0.037    0.037 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:1355(filter)
+        1    0.000    0.000    0.037    0.037 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFilter.py:187(filter)
+     7004    0.006    0.000    0.027    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageDraw.py:605(getink)
+    36016    0.027    0.000    0.027    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:580(readonly)
+     4320    0.005    0.000    0.023    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:640(_ensure_mutable)
+        1    0.000    0.000    0.023    0.023 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:3449(open)
+     7005    0.010    0.000    0.023    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:3428(_decompression_bomb_check)
+        1    0.000    0.000    0.023    0.023 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:338(preinit)
+     7004    0.009    0.000    0.021    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageDraw.py:145(_getink)
+    20166    0.012    0.000    0.016    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:564(width)
+    17510    0.010    0.000    0.015    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFont.py:72(_string_length_check)
+     4320    0.014    0.000    0.014    0.000 {built-in method PIL._imaging.raw_decoder}
+    20166    0.010    0.000    0.013    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:568(height)
+    60512    0.010    0.000    0.010    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:576(mode)
+     1440    0.010    0.000    0.010    0.000 {built-in method PIL._imaging.map_buffer}
+    56184    0.010    0.000    0.010    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:572(size)
+        2    0.000    0.000    0.010    0.005 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageEnhance.py:29(enhance)
+        2    0.000    0.000    0.010    0.005 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:3594(blend)
+        2    0.010    0.005    0.010    0.005 {built-in method PIL._imaging.blend}
+    34577    0.009    0.000    0.009    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:584(readonly)
+     7004    0.006    0.000    0.008    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageDraw.py:552(_multiline_check)
+     4323    0.008    0.000    0.008    0.000 {built-in method PIL._imaging.raw_encoder}
+        1    0.000    0.000    0.007    0.007 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:2210(resize)
+        1    0.000    0.000    0.006    0.006 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\GifImagePlugin.py:1(<module>)
+        1    0.000    0.000    0.006    0.006 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\BmpImagePlugin.py:1(<module>)
+        1    0.000    0.000    0.006    0.006 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageEnhance.py:71(__init__)
+        1    0.000    0.000    0.006    0.006 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFile.py:272(load)
+    21611    0.004    0.000    0.004    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:560(im)
+        1    0.000    0.000    0.003    0.003 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImagePalette.py:1(<module>)
+     2882    0.003    0.000    0.003    0.000 {built-in method PIL._imaging.draw}
+        2    0.000    0.000    0.002    0.001 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFont.py:803(truetype)
+        2    0.000    0.000    0.002    0.001 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFont.py:876(freetype)
+        2    0.000    0.000    0.002    0.001 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFont.py:217(__init__)
+        1    0.000    0.000    0.002    0.002 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:1(<module>)
+        1    0.000    0.000    0.002    0.002 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageStat.py:32(__init__)
+        1    0.000    0.000    0.002    0.002 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:1667(histogram)
+        1    0.000    0.000    0.001    0.001 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\JpegImagePlugin.py:1(<module>)
+        1    0.000    0.000    0.001    0.001 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageEnhance.py:1(<module>)
+        1    0.000    0.000    0.001    0.001 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageMath.py:1(<module>)
+        1    0.000    0.000    0.001    0.001 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFile.py:1(<module>)
+        1    0.000    0.000    0.001    0.001 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageEnhance.py:92(__init__)
+        2    0.001    0.000    0.001    0.000 {built-in method PIL._imagingft.getfont}
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:3522(_open_core)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFile.py:116(__init__)
+        4    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:984(load_read)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:756(_open)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageOps.py:1(<module>)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PpmImagePlugin.py:1(<module>)
+        9    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:163(read)
+        5    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:197(call)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageStat.py:120(mean)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\GifImagePlugin.py:56(LoadingStrategy)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:975(load_prepare)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFile.py:412(load_prepare)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:106(Disposal)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageStat.py:1(<module>)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageStat.py:96(sum)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\GimpGradientFile.py:1(<module>)
+        1    0.000    0.000    0.000    0.000 {built-in method PIL._imaging.new}
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:127(Blend)
+        2    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:1382(getbands)
+        4    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\_util.py:9(is_path)
+        4    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:203(crc)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageSequence.py:1(<module>)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\GimpPaletteFile.py:1(<module>)
+        3    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:3757(register_extensions)
+        2    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageMode.py:37(getmode)
+       18    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\_binary.py:94(i32be)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PaletteFile.py:1(<module>)
+       14    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:3746(register_extension)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:1018(load_end)
+        6    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:3681(register_open)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImagePalette.py:31(ImagePalette)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageStat.py:31(Stat)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\BmpImagePlugin.py:58(_dib_accept)
+        8    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:150(_crc32)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\_binary.py:60(i32le)
+        1    0.000    0.000    0.000    0.000 {built-in method PIL._imaging.zip_decoder}
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageChops.py:1(<module>)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\JpegPresets.py:1(<module>)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageMath.py:27(_Operand)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:448(chunk_IHDR)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\BmpImagePlugin.py:54(_accept)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:469(chunk_IDAT)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\BmpImagePlugin.py:65(BmpImageFile)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:382(__init__)
+        4    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFile.py:687(_safe_read)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\GifImagePlugin.py:80(GifImageFile)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageStat.py:91(count)
+        6    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:3719(register_save)
+        6    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:3704(register_mime)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:515(chunk_gAMA)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:381(PngStream)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:549(chunk_pHYs)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:158(ChunkStream)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:752(PngImageFile)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PpmImagePlugin.py:163(PpmPlainDecoder)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\GimpPaletteFile.py:23(GimpPaletteFile)
+        2    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:3732(register_save_all)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:532(chunk_sRGB)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFile.py:113(ImageFile)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:252(iTXt)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\JpegImagePlugin.py:336(JpegImageFile)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFile.py:457(StubImageFile)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFile.py:811(PyDecoder)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:1139(_fdat)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFile.py:487(Parser)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFile.py:448(StubHandler)
+        2    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:744(_accept)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFile.py:865(PyEncoder)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\JpegImagePlugin.py:327(_accept)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\GifImagePlugin.py:71(_accept)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFile.py:101(_Tile)
+        3    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\Image.py:3778(register_decoder)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:279(PngInfo)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFile.py:733(PyCodec)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PpmImagePlugin.py:57(PpmImageFile)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageSequence.py:24(Iterator)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageEnhance.py:25(_Enhance)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PpmImagePlugin.py:49(_accept)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PaletteFile.py:22(PaletteFile)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\GifImagePlugin.py:647(_Frame)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\GimpGradientFile.py:67(GradientFile)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFilter.py:184(__init__)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:159(__init__)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageEnhance.py:43(Color)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:375(_RewindState)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageOps.py:417(SupportsGetMesh)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:1152(_Frame)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\BmpImagePlugin.py:325(BmpRleDecoder)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFile.py:722(PyCodecState)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:1128(_idat)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageEnhance.py:84(Brightness)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageEnhance.py:63(Contrast)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\BmpImagePlugin.py:401(DibImageFile)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\GimpGradientFile.py:115(GimpGradientFile)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PpmImagePlugin.py:300(PpmDecoder)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\PngImagePlugin.py:190(close)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageEnhance.py:100(Sharpness)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFile.py:347(<lambda>)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\PIL\ImageFile.py:96(_tilesort)
+
+
+
+
+Compose相关:
+         1851958 function calls (1809619 primitive calls) in 151.038 seconds
+
+   Ordered by: cumulative time
+   List reduced from 1166 to 11 due to restriction <'compose'>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+     2880    1.053    0.000   64.215    0.022 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\moviepy\video\VideoClip.py:720(compose_on)
+     2880   27.309    0.009   32.876    0.011 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\moviepy\video\VideoClip.py:796(compose_mask)
+        1    0.000    0.000    0.004    0.004 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\yaml\composer.py:29(get_single_node)
+        1    0.000    0.000    0.004    0.004 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\yaml\composer.py:50(compose_document)
+     27/1    0.000    0.000    0.004    0.004 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\yaml\composer.py:63(compose_node)
+      3/1    0.000    0.000    0.004    0.004 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\yaml\composer.py:117(compose_mapping_node)
+       24    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\yaml\composer.py:88(compose_scalar_node)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\yaml\composer.py:1(<module>)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\yaml\composer.py:11(Composer)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\yaml\composer.py:13(__init__)
+        1    0.000    0.000    0.000    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\yaml\composer.py:8(ComposerError)
+
+
+
+
+get_frame相关:
+         1851958 function calls (1809619 primitive calls) in 151.038 seconds
+
+   Ordered by: cumulative time
+   List reduced from 1166 to 3 due to restriction <'get_frame'>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+14169/4205    0.030    0.000  130.591    0.031 <decorator-gen-17>:1(get_frame)
+14169/4205    1.107    0.000  130.508    0.031 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\moviepy\Clip.py:66(get_frame)
+     1324    0.170    0.000    0.313    0.000 E:\Miniconda3\envs\lyrc-mv\Lib\site-packages\moviepy\audio\io\readers.py:188(get_frame)
+
+
