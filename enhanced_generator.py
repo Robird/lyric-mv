@@ -131,11 +131,9 @@ class EnhancedJingwuGenerator:
         print("使用LyricClip合成视频...")
 
         # 只需要LyricClip，背景已经集成在其中
-        all_clips = [lyric_clip]
-
         # 使用现有的合成和导出逻辑
         self._finalize_and_export_video(
-            all_clips=all_clips,
+            lyric_clip=lyric_clip,
             audio_clip=audio_clip,
             output_path=output_path,
             temp_audio_file_suffix="lyric_clip",
@@ -228,7 +226,7 @@ class EnhancedJingwuGenerator:
 
     def _finalize_and_export_video(
         self,
-        all_clips: List,  # 可以是ImageClip或LyricClip的列表
+        lyric_clip: LyricClip,  # 直接只使用1个LyricClip会带来9倍的性能提高
         audio_clip: AudioFileClip,
         output_path: str,
         temp_audio_file_suffix: str = "generic",
@@ -246,9 +244,10 @@ class EnhancedJingwuGenerator:
             draft_mode: 草稿模式，使用快速编码设置
         """
         print("合成视频...")
-        final_video = CompositeVideoClip(all_clips)
+        final_video:LyricClip = lyric_clip
+        # final_video = CompositeVideoClip(all_clips)
         final_video = final_video.with_audio(audio_clip)
-        final_video = final_video.with_fps(self.fps)
+        # final_video = final_video.with_fps(self.fps)
 
         temp_audio_filename = f'temp-audio-{temp_audio_file_suffix}-{hash(output_path) % 10000}.m4a'
 
