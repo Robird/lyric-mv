@@ -14,7 +14,7 @@ import re
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Optional, Dict, Any
 from enum import Enum
-from moviepy.editor import ImageClip
+from moviepy import ImageClip
 
 # 导入布局相关的数据类型
 from layout_types import LyricRect, LyricStyle

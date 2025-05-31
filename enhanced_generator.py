@@ -4,8 +4,9 @@
 """
 
 import os
+import time
 from typing import List, Optional
-from moviepy.editor import AudioFileClip, ImageClip, CompositeVideoClip, ColorClip
+from moviepy import AudioFileClip, ImageClip, CompositeVideoClip, ColorClip
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 import numpy as np
 import traceback
@@ -176,13 +177,14 @@ class EnhancedJingwuGenerator:
         )
 
         clip = ImageClip(text_img_array, duration=duration)
-        clip = clip.set_start(start_time)
+        clip = clip.with_start(start_time)
           # 简化动画效果以避免渲染问题
         if animation == 'fade':
             if duration > 0.6:
-                clip = clip.crossfadein(0.3).crossfadeout(0.3)
+                from moviepy.video.fx import CrossFadeIn, CrossFadeOut
+                clip = clip.with_effects([CrossFadeIn(0.3), CrossFadeOut(0.3)])
         elif animation == 'slide':
-            clip = clip.set_position(lambda t: (-self.width + int(t * self.width / 0.5), 'center') if t < 0.5 else ('center', 'center'))
+            clip = clip.with_position(lambda t: (-self.width + int(t * self.width / 0.5), 'center') if t < 0.5 else ('center', 'center'))
         # 暂时禁用zoom动画以避免PIL兼容性问题
         # elif animation == 'zoom':
         #     if is_highlighted:
@@ -240,7 +242,7 @@ class EnhancedJingwuGenerator:
                 # 裁剪片段以符合时长限制
                 new_duration = max_duration - start_time
                 if new_duration > 0.01:  # 只保留有意义的片段
-                    clip = clip.subclip(0, new_duration)
+                    clip = clip.subclipped(0, new_duration)
                     print(f"   裁剪片段时长: {duration:.2f}s -> {new_duration:.2f}s")
                     validated_clips.append(clip)
                 else:
@@ -280,29 +282,79 @@ class EnhancedJingwuGenerator:
         audio_clip: AudioFileClip,
         output_path: str,
         temp_audio_file_suffix: str = "generic",
-        ffmpeg_params_custom: Optional[List[str]] = None
+        ffmpeg_params_custom: Optional[List[str]] = None,
+        draft_mode: bool = False
     ):
-        """(Helper) 合成所有片段并导出视频。"""
+        """(Helper) 合成所有片段并导出视频。
+
+        Args:
+            all_clips: 所有视频片段
+            audio_clip: 音频片段
+            output_path: 输出路径
+            temp_audio_file_suffix: 临时音频文件后缀
+            ffmpeg_params_custom: 自定义FFmpeg参数
+            draft_mode: 草稿模式，使用快速编码设置
+        """
         print("合成视频...")
-        final_video:CompositeVideoClip = CompositeVideoClip(all_clips)
-        final_video = final_video.set_audio(audio_clip)
-        final_video = final_video.set_fps(self.fps)
+        final_video = CompositeVideoClip(all_clips)
+        final_video = final_video.with_audio(audio_clip)
+        final_video = final_video.with_fps(self.fps)
 
         temp_audio_filename = f'temp-audio-{temp_audio_file_suffix}-{hash(output_path) % 10000}.m4a'
 
-        actual_ffmpeg_params = ffmpeg_params_custom if ffmpeg_params_custom is not None else ['-crf', '18']
+        # 根据模式选择编码配置
+        if draft_mode:
+            print("   🚀 使用草稿质量配置进行快速编码...")
+            codec_to_use = 'h264_nvenc'  # 优先使用NVENC硬件编码
+            preset_to_use = 'fast'
+            actual_ffmpeg_params = ffmpeg_params_custom if ffmpeg_params_custom is not None else ['-cq', '28']
+        else:
+            print("   🎬 使用产品质量配置进行编码...")
+            codec_to_use = 'libx264rgb'
+            preset_to_use = 'medium'
+            actual_ffmpeg_params = ffmpeg_params_custom if ffmpeg_params_custom is not None else ['-crf', '18']
 
         print(f"导出视频到: {output_path}")
-        final_video.write_videofile(
-            output_path,
-            codec='libx264',
-            audio_codec='aac',
-            temp_audiofile=temp_audio_filename,
-            remove_temp=True,
-            verbose=False,
-            logger=None,
-            preset='medium',
-            ffmpeg_params=actual_ffmpeg_params        )
+        print(f"   编码器: {codec_to_use}, 预设: {preset_to_use}, 参数: {actual_ffmpeg_params}")
+
+        # 开始计时
+        export_start_time = time.perf_counter()
+
+        try:
+            final_video.write_videofile(
+                output_path,
+                codec=codec_to_use,
+                audio_codec='aac',
+                temp_audiofile=temp_audio_filename,
+                remove_temp=True,
+                # verbose=False,
+                logger=None,
+                preset=preset_to_use,
+                ffmpeg_params=actual_ffmpeg_params
+            )
+        except Exception as e:
+            # 草稿模式下NVENC失败时快速回退到软件编码
+            if draft_mode and codec_to_use == "h264_nvenc":
+                print(f"⚠️  NVENC编码失败 ({e})，回退到软件编码...")
+                final_video.write_videofile(
+                    output_path,
+                    codec='libx264rgb',
+                    audio_codec='aac',
+                    temp_audiofile=temp_audio_filename,
+                    remove_temp=True,
+                    # verbose=False,
+                    logger=None,
+                    preset='ultrafast',
+                    ffmpeg_params=['-crf', '28']
+                )
+            else:
+                raise
+        finally:
+            # 结束计时并显示结果
+            export_end_time = time.perf_counter()
+            export_duration = export_end_time - export_start_time
+            mode_desc = "草稿模式" if draft_mode else "产品模式"
+            print(f"✅ 视频导出完成 ({mode_desc}): {export_duration:.2f} 秒")
     # --- END PRIVATE HELPER METHODS ---
 
 
@@ -312,7 +364,8 @@ class EnhancedJingwuGenerator:
                                audio_path: str = "",
                                output_path: str = "",
                                background_image: Optional[str] = None,
-                               t_max_sec: float = float('inf')) -> bool:
+                               t_max_sec: float = float('inf'),
+                               draft_mode: bool = False) -> bool:
         """生成双语版本视频或增强版视频 (纯OOP版)
 
         Args:
@@ -322,13 +375,14 @@ class EnhancedJingwuGenerator:
             output_path: 输出视频路径
             background_image: 背景图片路径（可选）
             t_max_sec: 最大时长限制
+            draft_mode: 草稿模式，使用快速编码设置（开发测试用）
 
         Returns:
             bool: 生成是否成功
         """
         return self._generate_video_with_timelines(
             main_timeline, aux_timeline, audio_path, output_path,
-            background_image, t_max_sec
+            background_image, t_max_sec, draft_mode
         )
 
     def _generate_video_with_timelines(self,
@@ -337,7 +391,8 @@ class EnhancedJingwuGenerator:
                                      audio_path: str = "",
                                      output_path: str = "",
                                      background_image: Optional[str] = None,
-                                     t_max_sec: float = float('inf')) -> bool:
+                                     t_max_sec: float = float('inf'),
+                                     draft_mode: bool = False) -> bool:
         """使用LyricTimeline对象生成视频的核心方法"""
 
         # 确定生成模式
@@ -354,7 +409,7 @@ class EnhancedJingwuGenerator:
             duration = min(original_duration, t_max_sec)
 
             if t_max_sec < original_duration:
-                audio = audio.subclip(0, t_max_sec)
+                audio = audio.subclipped(0, t_max_sec)
                 print(f"   音频已裁剪: {original_duration:.1f}s -> {duration:.1f}s")
             else:
                 print(f"   音频时长: {duration:.1f} 秒")
@@ -433,7 +488,8 @@ class EnhancedJingwuGenerator:
                 all_clips=all_video_clips,
                 audio_clip=audio,
                 output_path=output_path,
-                temp_audio_file_suffix=temp_suffix
+                temp_audio_file_suffix=temp_suffix,
+                draft_mode=draft_mode
             )
 
             print(f"{mode_name}视频生成成功！")
@@ -444,8 +500,14 @@ class EnhancedJingwuGenerator:
             traceback.print_exc()
             return False
 
-def demo_enhanced_features(config_path: Path, t_max_sec: float = float('inf')):
-    """使用配置文件生成歌词视频 (纯OOP版)"""
+def demo_enhanced_features(config_path: Path, t_max_sec: float = float('inf'), draft_mode: bool = False):
+    """使用配置文件生成歌词视频 (纯OOP版)
+
+    Args:
+        config_path: 配置文件路径
+        t_max_sec: 最大时长限制
+        draft_mode: 草稿模式，使用快速编码设置（开发测试用）
+    """
     print("精武英雄歌词视频生成器 - 纯OOP版")
     print("=" * 50)
 
@@ -556,7 +618,8 @@ def demo_enhanced_features(config_path: Path, t_max_sec: float = float('inf')):
         audio_path=str(audio_path),
         output_path=str(output_path),
         background_image=str(background_path),
-        t_max_sec=t_max_sec
+        t_max_sec=t_max_sec,
+        draft_mode=draft_mode
     )
 
     if success:
@@ -570,5 +633,18 @@ def demo_enhanced_features(config_path: Path, t_max_sec: float = float('inf')):
 
     return success
 
+def demo_draft_mode(config_path: Path, t_max_sec: float = float('inf')):
+    """草稿模式演示 - 快速生成用于开发测试"""
+    print("🚀 草稿模式演示 - 快速编码")
+    print("=" * 50)
+    print("注意: 草稿模式使用快速编码设置，质量较低但速度更快，适合开发测试使用")
+    print()
+
+    return demo_enhanced_features(config_path, t_max_sec, draft_mode=True)
+
 if __name__ == "__main__":
-    demo_enhanced_features(Path(r"精武英雄\lrc-mv.yaml"), t_max_sec=20.0)
+    # 默认使用草稿模式进行快速测试
+    # demo_draft_mode(Path(r"精武英雄\lrc-mv.yaml"), t_max_sec=20.0)
+
+    # 如需产品质量，取消注释下面这行
+    demo_enhanced_features(Path(r"精武英雄\lrc-mv.yaml"))
